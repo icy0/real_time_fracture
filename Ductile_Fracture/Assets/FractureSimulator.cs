@@ -7,27 +7,118 @@ using MathNet.Numerics.LinearAlgebra;
 using MathNet.Numerics.LinearAlgebra.Double;
 using MathNet.Numerics.LinearAlgebra.Factorization;
 
+public class MathUtility
+{
+    public static int KroneckerDelta(int i, int j)
+    {
+        if (i == j) return 1;
+        else return 0;
+    }
+
+    public static Vector<double> KroneckerDeltaVector(int i)
+    {
+        Vector<double> kdv = Vector<double>.Build.DenseOfArray(new double[] { 0.0f, 0.0f, 0.0f, 0.0f });
+
+        if (i == 1)
+            kdv.At(0, 1.0f);
+        else if (i == 2)
+            kdv.At(1, 1.0f);
+        else if (i == 3)
+            kdv.At(2, 1.0f);
+
+        return kdv;
+    }
+
+    public static Matrix<double> M(Vector<double> a)
+    {
+        if (!(a.At(0) == 0.0 && a.At(1) == 0.0 && a.At(2) == 0.0))
+        {
+            Matrix<double> m = Matrix<double>.Build.DenseOfRowArrays(new double[][]
+            {
+               new double[] { a.At(0) * a.At(0), a.At(0) * a.At(1), a.At(0) * a.At(2)},
+               new double[] { a.At(1) * a.At(0), a.At(1) * a.At(1), a.At(1) * a.At(2)},
+               new double[] { a.At(2) * a.At(0), a.At(2) * a.At(1), a.At(2) * a.At(2)}
+            });
+            return m / a.L2Norm();
+        }
+        else
+        {
+            return Matrix<double>.Build.DenseOfRowArrays(new double[][]
+            {
+               new double[] { 0.0, 0.0, 0.0},
+               new double[] { 0.0, 0.0, 0.0},
+               new double[] { 0.0, 0.0, 0.0}
+            });
+
+        }
+    }
+}
+
+
 public class Node
 {
     public Vector3 mat_pos;
     public Vector3 world_pos;
+    public Vector3 new_world_pos;
     public Vector3 world_speed;
+
+    public HashSet<Vector<double>> tensile_forces = new HashSet<Vector<double>>();
+    public HashSet<Vector<double>> compressive_forces = new HashSet<Vector<double>>();
 
     public Node(Vector3 m_pos, Vector3 w_pos)
     {
         mat_pos = m_pos;
         world_pos = w_pos;
+        new_world_pos = w_pos;
         world_speed = new Vector3(0.0f, 0.0f, 0.0f);
     }
 
-    public void UpdateSeparationTensor()
+    public void AddTensileForce(Vector<double> tf)
     {
-        // TODO
+        tensile_forces.Add(tf);
+    }
+
+    public void AddCompressiveForce(Vector<double> cf)
+    {
+        compressive_forces.Add(cf);
     }
 
     public bool DoesCrackOccur(double toughness)
     {
-        // TODO
+        Vector<double> sumOverTensileForces = Vector<double>.Build.DenseOfArray(new double[] { 0.0, 0.0, 0.0 });
+        Matrix<double> sumOfMOfTensileForces = Matrix<double>.Build.DenseOfRowArrays(new double[][]
+        {
+            new double[] { 0.0, 0.0, 0.0},
+            new double[] { 0.0, 0.0, 0.0},
+            new double[] { 0.0, 0.0, 0.0}
+        });
+        foreach (Vector<double> tf in tensile_forces)
+        {
+            sumOverTensileForces += tf;
+            sumOfMOfTensileForces += MathUtility.M(tf);
+        }
+
+        Vector<double> sumOverCompressiveForces = Vector<double>.Build.DenseOfArray(new double[] { 0.0, 0.0, 0.0 });
+        Matrix<double> sumOfMOfCompressiveForces = Matrix<double>.Build.DenseOfRowArrays(new double[][]
+        {
+            new double[] { 0.0, 0.0, 0.0},
+            new double[] { 0.0, 0.0, 0.0},
+            new double[] { 0.0, 0.0, 0.0}
+        });
+        foreach (Vector<double> cf in compressive_forces)
+        {
+            sumOverCompressiveForces += cf;
+            sumOfMOfCompressiveForces += MathUtility.M(cf);
+        }
+
+        Matrix<double> st = (1/2.0) * (-MathUtility.M(sumOverTensileForces) + sumOfMOfTensileForces + MathUtility.M(sumOverCompressiveForces) - sumOfMOfCompressiveForces);
+
+        Evd<double> evd = st.Evd(Symmetricity.Symmetric);
+        if(toughness < evd.EigenValues.Maximum().Real)
+        {
+            return true; 
+        }
+
         return false;
     }
 }
@@ -158,17 +249,6 @@ public class Tetrahedron
         return nodes;
     }
 
-    public List<Vector3> GetMaterialPositions()
-    {
-        List <Vector3> list = new List<Vector3>();
-        foreach(Node n in nodes)
-        {
-            list.Add(n.mat_pos);
-        }
-
-        return list;
-    }
-
     public void DrawEdges()
     {
         Debug.DrawLine(nodes[0].world_pos, nodes[1].world_pos);
@@ -179,39 +259,9 @@ public class Tetrahedron
         Debug.DrawLine(nodes[2].world_pos, nodes[3].world_pos);
     }
 
-    public void SetNewNode(int i, Node n)
+    public float Volume()
     {
-        nodes[i] = n;
-    }
-
-    public int KroneckerDelta(int i, int j)
-    {
-        if (i == j) return 1;
-        else return 0;
-    }
-
-    public Matrix<double> M(Vector<double> a)
-    {
-        if(!(a.At(0) == 0.0 && a.At(1) == 0.0 && a.At(2) == 0.0))
-        {
-            Matrix<double> m = Matrix<double>.Build.DenseOfRowArrays(new double[][]
-            {
-               new double[] { a.At(0) * a.At(0), a.At(0) * a.At(1), a.At(0) * a.At(2)},
-               new double[] { a.At(1) * a.At(0), a.At(1) * a.At(1), a.At(1) * a.At(2)},
-               new double[] { a.At(2) * a.At(0), a.At(2) * a.At(1), a.At(2) * a.At(2)}
-            });
-            return m / a.L2Norm();
-        }
-        else
-        {
-            return Matrix<double>.Build.DenseOfRowArrays(new double[][]
-            { 
-               new double[] { 0.0, 0.0, 0.0}, 
-               new double[] { 0.0, 0.0, 0.0}, 
-               new double[] { 0.0, 0.0, 0.0}
-            });
-
-        }
+        return 1 / 6.0f * Mathf.Abs(Vector3.Dot(Vector3.Cross(nodes[1].mat_pos - nodes[0].mat_pos, nodes[2].mat_pos - nodes[0].mat_pos), (nodes[3].mat_pos - nodes[0].mat_pos)));
     }
 
     public Matrix<double> ElemLoc()
@@ -247,28 +297,14 @@ public class Tetrahedron
         return beta.Inverse();
     }
 
-    public Vector<double> KroneckerDeltaVector(int i)
-    {
-        Vector<double> kdv = Vector<double>.Build.DenseOfArray(new double[] { 0.0f, 0.0f, 0.0f, 0.0f });
-
-        if (i == 1)
-            kdv.At(0, 1.0f);
-        else if (i == 2)
-            kdv.At(1, 1.0f);
-        else if (i == 3)
-            kdv.At(2, 1.0f);
-
-        return kdv;
-    }
-
     public Vector<double> LocInterp(int i)
     {
-        return (ElemLoc() * Beta()) * KroneckerDeltaVector(i);
+        return (ElemLoc() * Beta()) * MathUtility.KroneckerDeltaVector(i);
     }
 
     public Vector<double> SpeedInterp(int i)
     {
-        return (ElemSpeed() * Beta()) * KroneckerDeltaVector(i);
+        return (ElemSpeed() * Beta()) * MathUtility.KroneckerDeltaVector(i);
     }
 
     public Matrix<double> GreenStrain()
@@ -308,7 +344,7 @@ public class Tetrahedron
                 double tmp = 0.0f;
                 for (int i = 0; i < 3; i++)
                 {
-                    tmp += dilation * gs.At(i, i) * KroneckerDelta(row, column) + 2.0f * rigidity * gs.At(row, column);
+                    tmp += dilation * gs.At(i, i) * MathUtility.KroneckerDelta(row, column) + 2.0f * rigidity * gs.At(row, column);
                 }
                 esdts.At(row, column, tmp);
             }
@@ -334,7 +370,7 @@ public class Tetrahedron
                 double tmp = 0.0f;
                 for (int i = 0; i < 3; i++)
                 {
-                    tmp += phi * sr.At(i, i) * KroneckerDelta(row, column) + 2.0f * psi * sr.At(row, column);
+                    tmp += phi * sr.At(i, i) * MathUtility.KroneckerDelta(row, column) + 2.0f * psi * sr.At(row, column);
                 }
                 vsdtsr.At(row, column, tmp);
             }
@@ -359,7 +395,7 @@ public class Tetrahedron
         });
         for(int i = 0; i < 3; i++)
         {
-            tcotis += System.Math.Max(0.0, evd.EigenValues.At(i).Real) * M(evd.EigenVectors.Column(i));
+            tcotis += System.Math.Max(0.0, evd.EigenValues.At(i).Real) * MathUtility.M(evd.EigenVectors.Column(i));
         }
 
         return tcotis;
@@ -376,7 +412,7 @@ public class Tetrahedron
         });
         for (int i = 0; i < 3; i++)
         {
-            ccotis += System.Math.Min(0.0, evd.EigenValues.At(i).Real) * M(evd.EigenVectors.Column(i));
+            ccotis += System.Math.Min(0.0, evd.EigenValues.At(i).Real) * MathUtility.M(evd.EigenVectors.Column(i));
         }
 
         return ccotis;
@@ -446,14 +482,14 @@ public class Tetrahedron
         return tf;
     }
 
-    public float Volume()
+    public void UpdateSeparationTensorOfNodes(double dilation, double rigidity, double phi, double psi)
     {
-        return 1 / 6.0f * Mathf.Abs(Vector3.Dot(Vector3.Cross(nodes[1].mat_pos - nodes[0].mat_pos, nodes[2].mat_pos - nodes[0].mat_pos), (nodes[3].mat_pos - nodes[0].mat_pos)));
+        for(int i = 0; i < 4; i++)
+        {
+            nodes[i].AddTensileForce(TensileForce(dilation, rigidity, phi, psi, i));
+            nodes[i].AddCompressiveForce(CompressiveForce(dilation, rigidity, phi, psi, i));
+        }
     }
-}
-public class ContinuousModel
-{
-
 }
 
 public class FractureSimulator : MonoBehaviour
@@ -471,18 +507,41 @@ public class FractureSimulator : MonoBehaviour
     List<Tetrahedron> alltetrahedra = new List<Tetrahedron>();
     List<Node> allnodes = new List<Node>();
 
+    public const double GLASS_DILATION = 1.04e8;
+    public const double GLASS_RIGIDITY = 1.04e8;
+    public const double GLASS_PSI = 0.0;
+    public const double GLASS_PHI = 6760.0;
+    public const double GLASS_DENSITY = 2588.0;
+    public const double GLASS_TOUGHNESS = 10140.0;
+
     void Update()
     {
+        foreach(Node n in allnodes)
+        {
+            // update world_pos and world_speed of each Node
+            n.world_speed = (n.new_world_pos - n.world_pos) / Time.deltaTime;
+        }
+
+        foreach(Tetrahedron t in alltetrahedra)
+        {
+            t.UpdateSeparationTensorOfNodes(GLASS_DILATION, GLASS_RIGIDITY, GLASS_PHI, GLASS_PSI);
+            // update separation tensor of each node
+        }
+
+        foreach (Node n in allnodes)
+        {
+            // check if crack occurs at node
+            if (n.DoesCrackOccur(GLASS_TOUGHNESS /*glass*/))
+            {
+                // if yes, proceed with remeshing ...
+
+            }
+        }
+
         foreach (Tetrahedron t in alltetrahedra)
         {
             t.DrawEdges();
         }
-
-        // TODO update world_speed of each Node
-        // TODO update tensile and compressive forces at each node
-        // TODO update separation tensor of each node
-        // TODO check if crack occurs at node
-            // TODO if yes, proceed with remeshing, ...
     }
 
     void Start()
