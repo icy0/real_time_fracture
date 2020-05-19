@@ -36,6 +36,7 @@ public class MathUtility
                new double[] { a.At(1) * a.At(0), a.At(1) * a.At(1), a.At(1) * a.At(2)},
                new double[] { a.At(2) * a.At(0), a.At(2) * a.At(1), a.At(2) * a.At(2)}
             });
+
             return m / a.L2Norm();
         }
         else
@@ -120,6 +121,9 @@ public class Node
 
         Evd<double> evd = st.Evd(Symmetricity.Unknown);
         double max = System.Math.Max(System.Math.Max(evd.EigenValues.At(0).Real, evd.EigenValues.At(1).Real), evd.EigenValues.At(2).Real);
+
+        // TODO find corresponding vector to maximal eigenvalue
+
         if(toughness < max)
         {
             return true; 
@@ -409,25 +413,12 @@ public class Tetrahedron
         {
             for(int column = 0; column < 3; column++)
             {
-                /* TODO possible error here: 
-
-                either the part which is commented out is correct, or the other part is correct.
-                remains to be checked. */
-
-                //double tmp = 0.0f;
-                //for (int k = 0; k < 3; k++)
-                //{
-                //    tmp += (dilation * gs.At(k, k) * MathUtility.KroneckerDelta(row, column)) + (2.0f * rigidity * gs.At(row, column));
-                //}
-
                 double tmp = 0.0f;
                 for (int k = 0; k < 3; k++)
                 {
-
-                    tmp += (dilation * gs.At(k, k) * MathUtility.KroneckerDelta(row, column));
+                    tmp += dilation * gs.At(k, k) * MathUtility.KroneckerDelta(row, column);
                 }
                 tmp += 2.0f * rigidity * gs.At(row, column);
-
                 esdts.At(row, column, tmp);
             }
         }
@@ -450,10 +441,11 @@ public class Tetrahedron
             for (int column = 0; column < 3; column++)
             {
                 double tmp = 0.0f;
-                for (int i = 0; i < 3; i++)
+                for (int k = 0; k < 3; k++)
                 {
-                    tmp += (phi * sr.At(i, i) * MathUtility.KroneckerDelta(row, column)) + (2.0f * psi * sr.At(row, column));
+                    tmp += phi * sr.At(k, k) * MathUtility.KroneckerDelta(row, column);
                 }
+                tmp += 2.0f * psi * sr.At(row, column);
                 vsdtsr.At(row, column, tmp);
             }
         }
@@ -477,7 +469,13 @@ public class Tetrahedron
         });
         for(int i = 0; i < 3; i++)
         {
-            tcotis += System.Math.Max(0.0, evd.EigenValues.At(i).Real) * MathUtility.M(evd.EigenVectors.Column(i));
+            Vector<double> nev = evd.EigenVectors.Column(i);
+            double nev_len = nev.L2Norm();
+            nev.At(0, nev.At(0) / nev_len);
+            nev.At(1, nev.At(1) / nev_len);
+            nev.At(2, nev.At(2) / nev_len);
+
+            tcotis += System.Math.Max(0.0, evd.EigenValues.At(i).Real) * MathUtility.M(nev);
         }
 
         return tcotis;
@@ -494,7 +492,13 @@ public class Tetrahedron
         });
         for (int i = 0; i < 3; i++)
         {
-            ccotis += System.Math.Min(0.0, evd.EigenValues.At(i).Real) * MathUtility.M(evd.EigenVectors.Column(i));
+            Vector<double> nev = evd.EigenVectors.Column(i);
+            double nev_len = nev.L2Norm();
+            nev.At(0, nev.At(0) / nev_len);
+            nev.At(1, nev.At(1) / nev_len);
+            nev.At(2, nev.At(2) / nev_len);
+
+            ccotis += System.Math.Min(0.0, evd.EigenValues.At(i).Real) * MathUtility.M(nev);
         }
 
         return ccotis;
@@ -598,11 +602,11 @@ public class FractureSimulator : MonoBehaviour
 
     void Update()
     {
-        //Vector3 x = new Vector3(-0.01f * Time.deltaTime, 0.0f, 0.0f);
-        // allnodes[0].new_world_pos += x;
+        Vector3 x = new Vector3(-0.01f * Time.deltaTime, 0.01f * Time.deltaTime, -0.01f * Time.deltaTime);
+        allnodes[0].new_world_pos += x;
         foreach (Node n in allnodes)
         {
-            n.new_world_pos += new Vector3(1f * Time.deltaTime, 0.0f, 0.0f);
+            // n.new_world_pos += new Vector3(1f * Time.deltaTime, 0.0f, 0.0f);
             n.world_speed = (n.new_world_pos - n.world_pos) / Time.deltaTime;
             n.world_pos = n.new_world_pos;
         }
@@ -617,7 +621,7 @@ public class FractureSimulator : MonoBehaviour
             if (n.DoesCrackOccur(GLASS_TOUGHNESS))
             {
                 Debug.Log("Crack occured at Node " + n.mat_pos.x + " " + n.mat_pos.y + " " + n.mat_pos.z);
-                //Instantiate(sphere, n.world_pos, Quaternion.identity);
+                Instantiate(sphere, n.world_pos, Quaternion.identity);
                 
             }
         }

@@ -228,7 +228,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   sphere: {fileID: 2537005736865776384, guid: 64771b2604545d043898e7f20ad24660, type: 3}
-  Subdivisions: 0
+  Subdivisions: 1
 --- !u!1 &705507993
 GameObject:
   m_ObjectHideFlags: 0
