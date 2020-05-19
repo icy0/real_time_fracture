@@ -1,10 +1,7 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using MathNet.Numerics;
 using MathNet.Numerics.LinearAlgebra;
-using MathNet.Numerics.LinearAlgebra.Double;
 using MathNet.Numerics.LinearAlgebra.Factorization;
 
 public class MathUtility
@@ -45,15 +42,13 @@ public class MathUtility
         {
             return Matrix<double>.Build.DenseOfRowArrays(new double[][]
             {
-               new double[] { 0.0, 0.0, 0.0},
-               new double[] { 0.0, 0.0, 0.0},
-               new double[] { 0.0, 0.0, 0.0}
+               new double[] { 0.0, 0.0, 0.0 },
+               new double[] { 0.0, 0.0, 0.0 },
+               new double[] { 0.0, 0.0, 0.0 }
             });
-
         }
     }
 }
-
 
 public class Node
 {
@@ -83,14 +78,20 @@ public class Node
         compressive_forces.Add(cf);
     }
 
+    public void ClearTensileAndCompressiveForces()
+    {
+        tensile_forces.Clear();
+        compressive_forces.Clear();
+    }
+
     public bool DoesCrackOccur(double toughness)
     {
         Vector<double> sumOverTensileForces = Vector<double>.Build.DenseOfArray(new double[] { 0.0, 0.0, 0.0 });
         Matrix<double> sumOfMOfTensileForces = Matrix<double>.Build.DenseOfRowArrays(new double[][]
         {
-            new double[] { 0.0, 0.0, 0.0},
-            new double[] { 0.0, 0.0, 0.0},
-            new double[] { 0.0, 0.0, 0.0}
+            new double[] { 0.0, 0.0, 0.0 },
+            new double[] { 0.0, 0.0, 0.0 },
+            new double[] { 0.0, 0.0, 0.0 }
         });
         foreach (Vector<double> tf in tensile_forces)
         {
@@ -98,12 +99,14 @@ public class Node
             sumOfMOfTensileForces += MathUtility.M(tf);
         }
 
+        // Debug.Log("Sum of tensile forces: " + sumOverTensileForces.ToString());
+
         Vector<double> sumOverCompressiveForces = Vector<double>.Build.DenseOfArray(new double[] { 0.0, 0.0, 0.0 });
         Matrix<double> sumOfMOfCompressiveForces = Matrix<double>.Build.DenseOfRowArrays(new double[][]
         {
-            new double[] { 0.0, 0.0, 0.0},
-            new double[] { 0.0, 0.0, 0.0},
-            new double[] { 0.0, 0.0, 0.0}
+            new double[] { 0.0, 0.0, 0.0 },
+            new double[] { 0.0, 0.0, 0.0 },
+            new double[] { 0.0, 0.0, 0.0 }
         });
         foreach (Vector<double> cf in compressive_forces)
         {
@@ -111,10 +114,13 @@ public class Node
             sumOfMOfCompressiveForces += MathUtility.M(cf);
         }
 
+        // Debug.Log("Sum of compressive forces: " + sumOverCompressiveForces.ToString());
+
         Matrix<double> st = (1/2.0) * (-MathUtility.M(sumOverTensileForces) + sumOfMOfTensileForces + MathUtility.M(sumOverCompressiveForces) - sumOfMOfCompressiveForces);
 
-        Evd<double> evd = st.Evd(Symmetricity.Symmetric);
-        if(toughness < evd.EigenValues.Maximum().Real)
+        Evd<double> evd = st.Evd(Symmetricity.Unknown);
+        double max = System.Math.Max(System.Math.Max(evd.EigenValues.At(0).Real, evd.EigenValues.At(1).Real), evd.EigenValues.At(2).Real);
+        if(toughness < max)
         {
             return true; 
         }
@@ -201,7 +207,6 @@ public class Cuboid
         return connections;
     }
 
-    // location is NOT the center of the cuboid, but one random point position
     public Cuboid CreateCuboid(Vector3 location, Vector3 connectedToLocationOnX, Vector3 connectedToLocationOnY, Vector3 connectedToLocationOnZ)
     {
         Vector3[] vertices = new Vector3[8];
@@ -222,7 +227,6 @@ public class Cuboid
     {
         List<Tetrahedron> tetrahedra = new List<Tetrahedron>();
 
-        // TODO bring into correct order
         tetrahedra.Add(new Tetrahedron(nodes[2], nodes[5], nodes[6], nodes[7]));
         tetrahedra.Add(new Tetrahedron(nodes[0], nodes[4], nodes[5], nodes[7]));
         tetrahedra.Add(new Tetrahedron(nodes[0], nodes[2], nodes[3], nodes[7]));
@@ -299,34 +303,98 @@ public class Tetrahedron
 
     public Vector<double> LocInterp(int i)
     {
-        return (ElemLoc() * Beta()) * MathUtility.KroneckerDeltaVector(i);
+        Matrix<double> element_location = ElemLoc();
+        Debug.Assert(element_location.Row(0).Count == 4);
+        Debug.Assert(element_location.Column(0).Count == 3);
+
+        Matrix<double> beta = Beta();
+        Debug.Assert(beta.Row(0).Count == 4);
+        Debug.Assert(beta.Column(0).Count == 4);
+
+        Vector<double> kron_delta_vector = MathUtility.KroneckerDeltaVector(i + 1);
+        Debug.Assert(kron_delta_vector.Count == 4);
+
+        return element_location * beta * kron_delta_vector;
     }
 
     public Vector<double> SpeedInterp(int i)
     {
-        return (ElemSpeed() * Beta()) * MathUtility.KroneckerDeltaVector(i);
+        Matrix<double> element_speed = ElemSpeed();
+        Debug.Assert(element_speed.Row(0).Count == 4);
+        Debug.Assert(element_speed.Column(0).Count == 3);
+
+        Matrix<double> beta = Beta();
+        Debug.Assert(beta.Row(0).Count == 4);
+        Debug.Assert(beta.Column(0).Count == 4);
+
+        Vector<double> kron_delta_vector = MathUtility.KroneckerDeltaVector(i + 1);
+        Debug.Assert(kron_delta_vector.Count == 4);
+
+        return element_speed * beta * kron_delta_vector;
     }
 
+    /* This is a strain metric, that only measures deformation and is invariant with respect
+    to rigidbody transformations. */
     public Matrix<double> GreenStrain()
     {
-        return Matrix<double>.Build.DenseOfRowArrays(new double[][] 
-        { 
-            new double[] { LocInterp(0) * LocInterp(0) - 1.0f,  LocInterp(1) * LocInterp(0),  LocInterp(2) * LocInterp(0)},
-            new double[] { LocInterp(0) * LocInterp(1),  LocInterp(1) * LocInterp(1) - 1.0f,  LocInterp(2) * LocInterp(1)},
-            new double[] { LocInterp(0) * LocInterp(2),  LocInterp(1) * LocInterp(2),  LocInterp(2) * LocInterp(2) - 1.0f} 
+        Vector<double> li0 = LocInterp(0);
+        Vector<double> li1 = LocInterp(1);
+        Vector<double> li2 = LocInterp(2);
+
+        Debug.Assert(li0.Count == 3);
+        Debug.Assert(li1.Count == 3);
+        Debug.Assert(li2.Count == 3);
+
+        Matrix<double> gs = Matrix<double>.Build.DenseOfRowArrays(new double[][]
+        {
+            /* as i applied a steady, rigidbody translation to every node, the value at (0,0) of this matrix went slightly up. */
+            new double[] { li0 * li0 - 1.0f, li1 * li0, li2 * li0},
+            new double[] { li0 * li1, li1 * li1 - 1.0f, li2 * li1},
+            new double[] { li0 * li2, li1 * li2, li2 * li2 - 1.0f}
         });
+
+        Debug.Assert(gs.Column(0).Count == 3);
+        Debug.Assert(gs.Row(0).Count == 3);
+
+        return gs;
     }
 
+    /* This is a strain rate metric, that measures how the strain is changing over time. Though if the strain is zero, 
+    the strain reate is zero too. */
     public Matrix<double> StrainRate()
     {
-        return Matrix<double>.Build.DenseOfRowArrays(new double[][]
+        Vector<double> li0 = LocInterp(0);
+        Vector<double> li1 = LocInterp(1);
+        Vector<double> li2 = LocInterp(2);
+
+        Debug.Assert(li0.Count == 3);
+        Debug.Assert(li1.Count == 3);
+        Debug.Assert(li2.Count == 3);
+
+        Vector<double> si0 = SpeedInterp(0);
+        Vector<double> si1 = SpeedInterp(1);
+        Vector<double> si2 = SpeedInterp(2);
+
+        Debug.Assert(si0.Count == 3);
+        Debug.Assert(si1.Count == 3);
+        Debug.Assert(si2.Count == 3);
+
+        Matrix<double> sr = Matrix<double>.Build.DenseOfRowArrays(new double[][]
         {
-            new double[] { (LocInterp(0) * SpeedInterp(0)) + (SpeedInterp(0) * LocInterp(0)), (LocInterp(0) * SpeedInterp(1)) + (SpeedInterp(0) * LocInterp(1)), (LocInterp(0) * SpeedInterp(2)) + (SpeedInterp(0) * LocInterp(2))},
-            new double[] { (LocInterp(1) * SpeedInterp(0)) + (SpeedInterp(1) * LocInterp(0)), (LocInterp(1) * SpeedInterp(1)) + (SpeedInterp(1) * LocInterp(1)), (LocInterp(1) * SpeedInterp(2)) + (SpeedInterp(1) * LocInterp(2))},
-            new double[] { (LocInterp(2) * SpeedInterp(0)) + (SpeedInterp(2) * LocInterp(0)), (LocInterp(2) * SpeedInterp(1)) + (SpeedInterp(2) * LocInterp(1)), (LocInterp(2) * SpeedInterp(2)) + (SpeedInterp(2) * LocInterp(2))}
+            new double[] { (li0 * si0) + (si0 * li0), (li0 * si1) + (si0 * li1), (li0 * si2) + (si0 * li2) },
+            new double[] { (li1 * si0) + (si1 * li0), (li1 * si1) + (si1 * li1), (li1 * si2) + (si1 * li2) },
+            new double[] { (li2 * si0) + (si2 * li0), (li2 * si1) + (si2 * li1), (li2 * si2) + (si2 * li2) }
         });
+
+        Debug.Assert(sr.Column(0).Count == 3);
+        Debug.Assert(sr.Row(0).Count == 3);
+
+        return sr;
     }
 
+
+    /* This is an elastic stress metric, takes the green strain and properties of the material being modeled,
+    and produces a matrix which holds information of the internal elastic stress due to the strain. */
     public Matrix<double> ElasticStressDueToStrain(double dilation, double rigidity)
     {
         Matrix<double> gs = GreenStrain();
@@ -341,11 +409,25 @@ public class Tetrahedron
         {
             for(int column = 0; column < 3; column++)
             {
+                /* TODO possible error here: 
+
+                either the part which is commented out is correct, or the other part is correct.
+                remains to be checked. */
+
+                //double tmp = 0.0f;
+                //for (int k = 0; k < 3; k++)
+                //{
+                //    tmp += (dilation * gs.At(k, k) * MathUtility.KroneckerDelta(row, column)) + (2.0f * rigidity * gs.At(row, column));
+                //}
+
                 double tmp = 0.0f;
-                for (int i = 0; i < 3; i++)
+                for (int k = 0; k < 3; k++)
                 {
-                    tmp += dilation * gs.At(i, i) * MathUtility.KroneckerDelta(row, column) + 2.0f * rigidity * gs.At(row, column);
+
+                    tmp += (dilation * gs.At(k, k) * MathUtility.KroneckerDelta(row, column));
                 }
+                tmp += 2.0f * rigidity * gs.At(row, column);
+
                 esdts.At(row, column, tmp);
             }
         }
@@ -370,7 +452,7 @@ public class Tetrahedron
                 double tmp = 0.0f;
                 for (int i = 0; i < 3; i++)
                 {
-                    tmp += phi * sr.At(i, i) * MathUtility.KroneckerDelta(row, column) + 2.0f * psi * sr.At(row, column);
+                    tmp += (phi * sr.At(i, i) * MathUtility.KroneckerDelta(row, column)) + (2.0f * psi * sr.At(row, column));
                 }
                 vsdtsr.At(row, column, tmp);
             }
@@ -482,7 +564,7 @@ public class Tetrahedron
         return tf;
     }
 
-    public void UpdateSeparationTensorOfNodes(double dilation, double rigidity, double phi, double psi)
+    public void UpdateInternalForcesOfNodes(double dilation, double rigidity, double phi, double psi)
     {
         for(int i = 0; i < 4; i++)
         {
@@ -495,11 +577,11 @@ public class Tetrahedron
 public class FractureSimulator : MonoBehaviour
 {
     [SerializeField]
-    int Subdivisions;
+    Transform sphere;
 
     [SerializeField]
-    float EdgeLengthUntilSubdivision;
-
+    int Subdivisions;
+    
     Mesh mesh;
     Vector3[] vertices = new Vector3[8];
 
@@ -516,26 +598,33 @@ public class FractureSimulator : MonoBehaviour
 
     void Update()
     {
-        foreach(Node n in allnodes)
+        //Vector3 x = new Vector3(-0.01f * Time.deltaTime, 0.0f, 0.0f);
+        // allnodes[0].new_world_pos += x;
+        foreach (Node n in allnodes)
         {
-            // update world_pos and world_speed of each Node
+            n.new_world_pos += new Vector3(1f * Time.deltaTime, 0.0f, 0.0f);
             n.world_speed = (n.new_world_pos - n.world_pos) / Time.deltaTime;
+            n.world_pos = n.new_world_pos;
         }
 
-        foreach(Tetrahedron t in alltetrahedra)
+        foreach (Tetrahedron t in alltetrahedra)
         {
-            t.UpdateSeparationTensorOfNodes(GLASS_DILATION, GLASS_RIGIDITY, GLASS_PHI, GLASS_PSI);
-            // update separation tensor of each node
+            t.UpdateInternalForcesOfNodes(GLASS_DILATION, GLASS_RIGIDITY, GLASS_PHI, GLASS_PSI);
         }
 
         foreach (Node n in allnodes)
         {
-            // check if crack occurs at node
-            if (n.DoesCrackOccur(GLASS_TOUGHNESS /*glass*/))
+            if (n.DoesCrackOccur(GLASS_TOUGHNESS))
             {
-                // if yes, proceed with remeshing ...
-
+                Debug.Log("Crack occured at Node " + n.mat_pos.x + " " + n.mat_pos.y + " " + n.mat_pos.z);
+                //Instantiate(sphere, n.world_pos, Quaternion.identity);
+                
             }
+        }
+
+        foreach(Node n in allnodes)
+        {
+            n.ClearTensileAndCompressiveForces();
         }
 
         foreach (Tetrahedron t in alltetrahedra)
@@ -559,7 +648,6 @@ public class FractureSimulator : MonoBehaviour
         vertices[7] = temp[6];
 
         Cuboid main_cuboid = new Cuboid(vertices);
-        // TODO check for dimensional subdivision
         allcuboids.Add(main_cuboid);
 
         // subdivide the cuboid into more cuboids

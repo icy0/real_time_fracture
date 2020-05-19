@@ -227,8 +227,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: aa41b6981d1321c439513694b167cd23, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Subdivisions: 2
-  EdgeLengthUntilSubdivision: 0
+  sphere: {fileID: 2537005736865776384, guid: 64771b2604545d043898e7f20ad24660, type: 3}
+  Subdivisions: 0
 --- !u!1 &705507993
 GameObject:
   m_ObjectHideFlags: 0
