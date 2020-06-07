@@ -14,6 +14,40 @@ public class MathUtility
         else return 0;
     }
 
+    public static Vector<float> ToVector(Vector3 x)
+    {
+        return Vector<float>.Build.DenseOfArray(new float[] { x.x, x.y, x.z});
+    }
+
+    public static bool EqualsRoughly(Vector<float> x, Vector<float> y, float maximum_difference)
+    {
+        for(int member = 0; member < 3; member++)
+        {
+            if(x.At(member) - (y.At(member)) > maximum_difference)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static Tuple<bool, Vector<float>> LinePlaneIntersection(Vector<float> n, Vector<float> normal, Vector<float> a, Vector<float> b)
+    {
+        Vector<float> w = a - n;
+        Vector<float> u = b - a;
+        float length_of_edge = (float)u.L2Norm();
+        float scalar = (-normal).DotProduct(w) / normal.DotProduct(u);
+
+        if (scalar >= 0.0f && scalar <= 1.0f)
+        {
+            return new Tuple<bool, Vector<float>>(true, a + (u * scalar));
+        }
+        else
+        {
+            return new Tuple<bool, Vector<float>>(false, null);
+        }
+    }
+
     public static bool IsOnPositiveSide(Node n, Vector<float> point_on_plane, Vector<float> plane_normal)
     {
         Vector<float> n_pos = Vector<float>.Build.DenseOfArray(new float[] { n.world_pos.x, n.world_pos.y, n.world_pos.z});
@@ -28,11 +62,17 @@ public class MathUtility
         }
     }
 
-    public static Node WhichNodeIsOneLine(Node line_n1, Node line_n2, Node x, Node y)
+    public static Node WhichNodeIsOnLine(Node line_n1, Node line_n2, Node intersection_x, Node intersection_y)
     {
-        // TODO
+        Vector<float> n1 = Vector<float>.Build.DenseOfArray(new float[] { line_n1.world_pos.x, line_n1.world_pos.y, line_n1.world_pos.z});
+        Vector<float> n2 = Vector<float>.Build.DenseOfArray(new float[] { line_n2.world_pos.x, line_n2.world_pos.y, line_n2.world_pos.z});
+        Vector<float> x = Vector<float>.Build.DenseOfArray(new float[] { intersection_x.world_pos.x, intersection_x.world_pos.y, intersection_x.world_pos.z});
+        Vector<float> y = Vector<float>.Build.DenseOfArray(new float[] { intersection_y.world_pos.x, intersection_y.world_pos.y, intersection_y.world_pos.z});
 
-        return null;
+        Vector<float> projection_of_x = n1 + (x - n1).DotProduct(n2 - n1) / (n2 - n1).DotProduct(n2 - n1) * (n2 - n1);
+        Vector<float> projection_of_y = n1 + (y - n1).DotProduct(n2 - n1) / (n2 - n1).DotProduct(n2 - n1) * (n2 - n1);
+
+        return (projection_of_x.L2Norm() < projection_of_y.L2Norm()) ? intersection_x : intersection_y;
     }
 
     public static int GetIndexOf(Tetrahedron x, Node n)
@@ -130,7 +170,7 @@ public class Node
         foreach (Tetrahedron t in attached_elements)
         {
             List<Tuple<Node, Node, Vector<float>>> intersection_points = new List<Tuple<Node, Node, Vector<float>>>();
-            intersection_points = t.Intersect(world_pos_of_node, fracture_plane_normal);
+            intersection_points = t.Intersect(this, fracture_plane_normal);
 
             if (intersection_points.Count != 0)
             {
@@ -164,7 +204,7 @@ public class Node
             old_tetrahedra.Add(intersected_tet.Key);
             
             // find out which node is on which side of the fracture plane
-            List<Tuple<Node, bool>> node_on_positive_side = new List<Tuple<Node, bool>>();
+            List<Tuple<Node, bool>> nodes_with_halfspace_flag = new List<Tuple<Node, bool>>(); // true == positive halfspace
             Node[] nodes_of_t = intersected_tet.Key.GetNodes();
             int count_of_negative_nodes = 0;
             int count_of_positive_nodes = 0;
@@ -175,12 +215,12 @@ public class Node
 
                 if (MathUtility.IsOnPositiveSide(nodes_of_t[i], world_pos_of_node, fracture_plane_normal))
                 {
-                    node_on_positive_side.Add(new Tuple<Node, bool>(nodes_of_t[i], true));
+                    nodes_with_halfspace_flag.Add(new Tuple<Node, bool>(nodes_of_t[i], true));
                     count_of_positive_nodes++;
                 }
                 else
                 {
-                    node_on_positive_side.Add(new Tuple<Node, bool>(nodes_of_t[i], false));
+                    nodes_with_halfspace_flag.Add(new Tuple<Node, bool>(nodes_of_t[i], false));
                     count_of_negative_nodes++;
                 }
             }
@@ -191,31 +231,31 @@ public class Node
             Node kThree;
             if(count_of_positive_nodes == 1)
             {
-                foreach(Tuple<Node, bool> entry in node_on_positive_side)
+                foreach(Tuple<Node, bool> entry in nodes_with_halfspace_flag)
                 {
                     if (entry.Item2)
                     {
                         kOne = entry.Item1;
-                        node_on_positive_side.Remove(entry);
+                        nodes_with_halfspace_flag.Remove(entry);
                         break;
                     }
                 }
             }
             else if(count_of_negative_nodes == 1)
             {
-                foreach (Tuple<Node, bool> entry in node_on_positive_side)
+                foreach (Tuple<Node, bool> entry in nodes_with_halfspace_flag)
                 {
                     if (!entry.Item2)
                     {
                         kOne = entry.Item1;
-                        node_on_positive_side.Remove(entry);
+                        nodes_with_halfspace_flag.Remove(entry);
                         break;
                     }
                 }
             }
 
-            kTwo = node_on_positive_side[0].Item1;
-            kThree = node_on_positive_side[1].Item1;
+            kTwo = nodes_with_halfspace_flag[0].Item1;
+            kThree = nodes_with_halfspace_flag[1].Item1;
 
             // build three new tetrahedra
             Vector<float> kFourMatPos = world_pos_of_cube - intersected_tet.Value[0].Item3;
@@ -227,6 +267,31 @@ public class Node
             new_nodes.Add(kFour);
             new_nodes.Add(kFive);
 
+            // find one of the edges that cut the only quadriliteral face of the resulting polygon.
+            // say 
+            //      kTwo / kThree = w / y
+            //      kFour / kFive = a / b
+            // 
+            // we define two edges
+            //      (a - w) & (b - w) == (kFour - kTwo) & (kFive - kTwo)
+            // 
+            // one of these edges is cutting the quadriliteral face, one is not.
+            // the one that is cutting it has a specific property:
+            // 
+            // say a - w is the cutting edge, then if we project both b and y on the edge, 
+            // it will result in two vectors that both point in exactly opposite directions.
+            // for b - w both projections will point in the same direction.
+
+            Vector<float> w_to_a = MathUtility.ToVector(kTwo.world_pos) - MathUtility.ToVector(kFour.world_pos);
+            Vector<float> w_to_b = MathUtility.ToVector(kTwo.world_pos) - MathUtility.ToVector(kFive.world_pos);
+            Vector<float> w_to_y = MathUtility.ToVector(kTwo.world_pos) - MathUtility.ToVector(kThree.world_pos);
+
+            // project w_to_b onto w_to_a
+            Vector<float> tbc_1 = w_to_b - ((w_to_b.DotProduct(w_to_a) / (float)w_to_a.L2Norm()) * w_to_a);
+
+            // project w_to_y onto w_to_a
+            Vector<float> tbc_2 = w_to_y - ((w_to_y.DotProduct(w_to_a) / (float)w_to_a.L2Norm()) * w_to_a);
+
             Tetrahedron t1;
             Tetrahedron t2;
             Tetrahedron t3;
@@ -234,23 +299,29 @@ public class Node
             if (count_of_positive_nodes == 1)
             {
                 t1 = new Tetrahedron(kZeroPlus, kOne, kFour, kFive);
-                t2 = new Tetrahedron(kZeroMinus, kTwo, kThree, kFour);
-                t3 = new Tetrahedron(kZeroMinus, kTwo, kFour, kFive);
+                t2 = new Tetrahedron(kZeroMinus, kFour, kTwo, kFive);
 
-                if (t2.Intersect(t3))
+                if (tbc_1.DotProduct(tbc_2) < 0.0f)
                 {
-                    t3 = new Tetrahedron(kZeroMinus, kThree, kFour, kFive);
+                    t3 = new Tetrahedron(kZeroMinus, kFour, kTwo, kThree);
+                }
+                else
+                {
+                    t3 = new Tetrahedron(kZeroMinus, kFive, kTwo, kThree);
                 }
             }
             else
             {
                 t1 = new Tetrahedron(kZeroMinus, kOne, kFour, kFive);
-                t2 = new Tetrahedron(kZeroPlus, kTwo, kThree, kFour);
-                t3 = new Tetrahedron(kZeroPlus, kTwo, kFour, kFive);
+                t2 = new Tetrahedron(kZeroPlus, kFour, kTwo, kFive);
 
-                if (t2.Intersect(t3))
+                if (tbc_1.DotProduct(tbc_2) < 0.0f)
                 {
-                    t3 = new Tetrahedron(kZeroPlus, kThree, kFour, kFive);
+                    t3 = new Tetrahedron(kZeroPlus, kFour, kTwo, kThree);
+                }
+                else
+                {
+                    t3 = new Tetrahedron(kZeroPlus, kFive, kTwo, kThree);
                 }
             }
 
@@ -286,7 +357,6 @@ public class Node
                 if(first_connected_edge_intersected ^ second_connected_edge_intersected)
                 {
                     Node w = null, x = null, y = null, z = null; // x & y are the nodes attached to the intersected edges, w & z are the other ones.
-                    Node a = MathUtility.WhichNodeIsOneLine(n1, n2, kFour, kFive); // new node at the intersection point
 
                     // detect n1 and n2
                     if (first_connected_edge_intersected && !second_connected_edge_intersected)
@@ -300,6 +370,7 @@ public class Node
                         x = second_intersected_edge_n1;
                         y = second_intersected_edge_n2;
                     }
+                    Node a = MathUtility.WhichNodeIsOnLine(x, y, kFour, kFive); // new node at the intersection point
 
                     // detect n3 and n4
                     bool first_found = false;
@@ -357,8 +428,8 @@ public class Node
                         y = second_intersected_edge_n1;
                     }
 
-                    a = MathUtility.WhichNodeIsOneLine(x, w, kFour, kFive);
-                    b = MathUtility.WhichNodeIsOneLine(x, y, kFour, kFive);
+                    a = MathUtility.WhichNodeIsOnLine(x, w, kFour, kFive);
+                    b = MathUtility.WhichNodeIsOnLine(x, y, kFour, kFive);
 
                     foreach(Node n in neighbor.Key.GetNodes())
                     {
@@ -369,11 +440,24 @@ public class Node
                     }
 
                     Tetrahedron n_t1 = new Tetrahedron(a, b, x, z);
-                    Tetrahedron n_t2 = new Tetrahedron(z, w, y, a);
-                    Tetrahedron n_t3 = new Tetrahedron(z, w, a, b);
-                    if (n_t2.Intersect(n_t2))
+
+                    Vector<float> n_w_to_a = MathUtility.ToVector(a.world_pos) - MathUtility.ToVector(w.world_pos);
+                    Vector<float> n_w_to_b = MathUtility.ToVector(b.world_pos) - MathUtility.ToVector(w.world_pos);
+                    Vector<float> n_w_to_y = MathUtility.ToVector(y.world_pos) - MathUtility.ToVector(w.world_pos);
+
+                    Vector<float> n_tbc_1 = n_w_to_b - ((n_w_to_b.DotProduct(n_w_to_a) / (float)n_w_to_a.L2Norm()) * n_w_to_a);
+                    Vector<float> n_tbc_2 = n_w_to_y - ((n_w_to_y.DotProduct(n_w_to_a) / (float)n_w_to_a.L2Norm()) * n_w_to_a);
+
+                    Tetrahedron n_t2 = new Tetrahedron(z, a, w, b);
+                    Tetrahedron n_t3;
+
+                    if (n_tbc_1.DotProduct(n_tbc_2) < 0.0f)
                     {
-                        n_t3 = new Tetrahedron(z, y, a, b);
+                        n_t3 = new Tetrahedron(z, a, w, y);
+                    }
+                    else
+                    {
+                        n_t3 = new Tetrahedron(z, b, w, y);
                     }
 
                     new_tetrahedra.Add(n_t1);
@@ -383,6 +467,7 @@ public class Node
             }
         }
         // TODO remove kZero from list of all nodes
+        // TODO update mat_pos to be world_pos
     }
 
     public void AddTensileForce(Vector<float> tf)
@@ -436,24 +521,36 @@ public class Node
         Evd<float> evd = st.Evd(Symmetricity.Unknown);
         float max = Mathf.Max(Mathf.Max((float) evd.EigenValues.At(0).Real,(float) evd.EigenValues.At(1).Real),(float) evd.EigenValues.At(2).Real);
 
-        // TODO calculate corresponding eigenvector
-        // assume it has the same index as the max eigenvalue
-
-        if (toughness < max)
+        if(toughness < max)
         {
-            if(max == evd.EigenValues.At(0).Real)
+            bool debug_worked = false;
+            Vector<float> lhs_transformed_eigenvec_1 = st * evd.EigenVectors.Column(0);
+            Vector<float> lhs_transformed_eigenvec_2 = st * evd.EigenVectors.Column(1);
+            Vector<float> lhs_transformed_eigenvec_3 = st * evd.EigenVectors.Column(2);
+
+            Vector<float> rhs_transformed_eigenvec_1 = max * evd.EigenVectors.Column(0);
+            Vector<float> rhs_transformed_eigenvec_2 = max * evd.EigenVectors.Column(1);
+            Vector<float> rhs_transformed_eigenvec_3 = max * evd.EigenVectors.Column(2);
+
+            if(MathUtility.EqualsRoughly(lhs_transformed_eigenvec_1, rhs_transformed_eigenvec_1, maximum_difference: 0.1f))
             {
-                fracture_plane_normal = evd.EigenVectors.Column(0);
+                fracture_plane_normal = evd.EigenVectors.Column(0) / (float) evd.EigenVectors.Column(0).L2Norm();
+                debug_worked = true;
             }
-            else if (max == evd.EigenValues.At(1).Real)
+
+            else if (MathUtility.EqualsRoughly(lhs_transformed_eigenvec_2, rhs_transformed_eigenvec_2, maximum_difference: 0.1f))
             {
-                fracture_plane_normal = evd.EigenVectors.Column(1);
+                fracture_plane_normal = evd.EigenVectors.Column(1) / (float) evd.EigenVectors.Column(1).L2Norm();
+                debug_worked = true;
             }
-            else if (max == evd.EigenValues.At(2).Real)
+
+            else if (MathUtility.EqualsRoughly(lhs_transformed_eigenvec_3, rhs_transformed_eigenvec_3, maximum_difference: 0.1f))
             {
-                fracture_plane_normal = evd.EigenVectors.Column(2);
+                fracture_plane_normal = evd.EigenVectors.Column(2) / (float) evd.EigenVectors.Column(2).L2Norm();
+                debug_worked = true;
             }
-            return true; 
+            Debug.Assert(debug_worked);
+            return true;
         }
 
         return false;
@@ -583,22 +680,32 @@ public class Tetrahedron
         beta = Beta();
     }
 
-    public List<Tuple<Node, Node, Vector<float>>> Intersect(Vector<float> world_pos, Vector<float> normal_of_plane)
+    public List<Tuple<Node, Node, Vector<float>>> Intersect(Node n, Vector<float> normal_of_plane)
     {
         List<Tuple<Node, Node, Vector<float>>> intersection_points = new List<Tuple<Node, Node, Vector<float>>>();
+        Vector<float> world_pos_of_n = Vector<float>.Build.DenseOfArray(new float[] { n.world_pos.x, n.world_pos.y, n.world_pos.z });
 
-        // TODO
+        // only do intersection for edges between nodes that are not n
+        Node x, y, z;
+        int i = MathUtility.GetIndexOf(this, n);
+
+        x = this.nodes[(i + 1) % 4];
+        y = this.nodes[(i + 2) % 4];
+        z = this.nodes[(i + 3) % 4];
+
+        Vector<float> world_pos_of_x = Vector<float>.Build.DenseOfArray(new float[] { x.world_pos.x, x.world_pos.y, x.world_pos.z });
+        Vector<float> world_pos_of_y = Vector<float>.Build.DenseOfArray(new float[] { y.world_pos.x, y.world_pos.y, y.world_pos.z });
+        Vector<float> world_pos_of_z = Vector<float>.Build.DenseOfArray(new float[] { z.world_pos.x, z.world_pos.y, z.world_pos.z });
+
+        Tuple<bool, Vector<float>> intersection_xy = MathUtility.LinePlaneIntersection(world_pos_of_n, normal_of_plane, world_pos_of_x, world_pos_of_y);
+        Tuple<bool, Vector<float>> intersection_xz = MathUtility.LinePlaneIntersection(world_pos_of_n, normal_of_plane, world_pos_of_x, world_pos_of_z);
+        Tuple<bool, Vector<float>> intersection_yz = MathUtility.LinePlaneIntersection(world_pos_of_n, normal_of_plane, world_pos_of_y, world_pos_of_z);
+
+        if (intersection_xy.Item1) intersection_points.Add(new Tuple<Node, Node, Vector<float>>(x, y, intersection_xy.Item2));
+        if (intersection_xz.Item1) intersection_points.Add(new Tuple<Node, Node, Vector<float>>(x, z, intersection_xz.Item2));
+        if (intersection_yz.Item1) intersection_points.Add(new Tuple<Node, Node, Vector<float>>(y, z, intersection_yz.Item2));
 
         return intersection_points;
-    }
-
-    public bool Intersect(Tetrahedron other)
-    {
-        bool does_intersect = false;
-
-        // TODO
-
-        return does_intersect;
     }
 
     public Node[] GetNodes()
@@ -952,8 +1059,8 @@ public class FractureSimulator : MonoBehaviour
 
     void Update()
     {
-        Vector3 x = new Vector3(0.01f * Time.deltaTime, -0.01f * Time.deltaTime, 0.01f * Time.deltaTime);
-        allnodes[0].new_world_pos += x;
+        Vector3 x = new Vector3(0.1f * Time.deltaTime, -0.1f * Time.deltaTime, 0.1f * Time.deltaTime);
+        allnodes[2].new_world_pos += x;
         foreach (Node n in allnodes)
         {
             // n.new_world_pos += new Vector3(1f * Time.deltaTime, 0.0f, 0.0f);
@@ -993,114 +1100,155 @@ public class FractureSimulator : MonoBehaviour
         Time.fixedDeltaTime = 0.1f;
 
         // retrieve local vertex positions
-        mesh = gameObject.GetComponent<MeshFilter>().mesh;
-        Vector3[] temp = mesh.vertices.Distinct().ToArray();
-        vertices[0] = temp[5];
-        vertices[1] = temp[3];
-        vertices[2] = temp[2];
-        vertices[3] = temp[4];
-        vertices[4] = temp[7];
-        vertices[5] = temp[1];
-        vertices[6] = temp[0];
-        vertices[7] = temp[6];
-
-        Cuboid main_cuboid = new Cuboid(vertices);
-        allcuboids.Add(main_cuboid);
-
-        // subdivide the cuboid into more cuboids
-        for (int subdiv_index = 0; subdiv_index < Subdivisions; subdiv_index++)
+        MeshFilter meshFilter;
+        if(gameObject.TryGetComponent(out meshFilter))
         {
-            List<Cuboid> working_copy = new List<Cuboid>();
-            foreach (Cuboid c in allcuboids)
+            mesh = meshFilter.mesh;
+            Vector3[] temp = mesh.vertices.Distinct().ToArray();
+            vertices[0] = temp[5];
+            vertices[1] = temp[3];
+            vertices[2] = temp[2];
+            vertices[3] = temp[4];
+            vertices[4] = temp[7];
+            vertices[5] = temp[1];
+            vertices[6] = temp[0];
+            vertices[7] = temp[6];
+
+            for (int i = 0; i < vertices.Length; i++)
             {
-                working_copy.Add(c);
+                vertices[i].x *= transform.localScale.x;
+                vertices[i].y *= transform.localScale.y;
+                vertices[i].z *= -transform.localScale.z; // IMPORTANT: Unity has the z-axis swapped, so we swap it back.
             }
-            allcuboids.Clear();
-            for (int cuboid_index = 0; cuboid_index < working_copy.Count; cuboid_index++)
+
+            Cuboid main_cuboid = new Cuboid(vertices);
+            allcuboids.Add(main_cuboid);
+
+            // subdivide the cuboid into more cuboids
+            for (int subdiv_index = 0; subdiv_index < Subdivisions; subdiv_index++)
             {
-                Cuboid current_cuboid = working_copy[cuboid_index];
-                allcuboids.AddRange(current_cuboid.Subdivide());
-            }
-        }
-
-        // create nodes
-        for (int cuboid = 0; cuboid < allcuboids.Count; cuboid++)
-        {
-            allnodes.AddRange(allcuboids[cuboid].MakeNodesFromPoints(gameObject.transform.position));
-        }
-
-        // clear duplicates
-        for (int node_1 = 0; node_1 < allnodes.Count; node_1++)
-        {
-            int rerun_counter = 0;
-            for (int node_2 = 0; node_2 < allnodes.Count; node_2++)
-            {
-                if (node_1 == node_2) continue;
-
-                if (allnodes[node_1].world_pos == allnodes[node_2].world_pos)
+                List<Cuboid> working_copy = new List<Cuboid>();
+                foreach (Cuboid c in allcuboids)
                 {
-                    allnodes.Remove(allnodes[node_2]);
-                    node_2--;
-                    rerun_counter++;
+                    working_copy.Add(c);
+                }
+                allcuboids.Clear();
+                for (int cuboid_index = 0; cuboid_index < working_copy.Count; cuboid_index++)
+                {
+                    Cuboid current_cuboid = working_copy[cuboid_index];
+                    allcuboids.AddRange(current_cuboid.Subdivide());
                 }
             }
-            node_1 -= rerun_counter;
-        }
 
-        // find nodes for cuboids
-        for (int cuboid = 0; cuboid < allcuboids.Count; cuboid++)
-        {
-            for (int corner_pos = 0; corner_pos < 8; corner_pos++)
+            // create nodes
+            for (int cuboid = 0; cuboid < allcuboids.Count; cuboid++)
             {
-                for (int node = 0; node < allnodes.Count; node++)
+                allnodes.AddRange(allcuboids[cuboid].MakeNodesFromPoints(gameObject.transform.position));
+            }
+
+            // clear duplicates
+            for (int node_1 = 0; node_1 < allnodes.Count; node_1++)
+            {
+                int rerun_counter = 0;
+                for (int node_2 = 0; node_2 < allnodes.Count; node_2++)
                 {
-                    if (allcuboids[cuboid].point_positions[corner_pos] == allnodes[node].mat_pos)
+                    if (node_1 == node_2) continue;
+
+                    if (allnodes[node_1].world_pos == allnodes[node_2].world_pos)
                     {
-                        allcuboids[cuboid].nodes[corner_pos] = allnodes[node];
+                        allnodes.Remove(allnodes[node_2]);
+                        node_2--;
+                        rerun_counter++;
+                    }
+                }
+                node_1 -= rerun_counter;
+            }
+
+            // find nodes for cuboids
+            for (int cuboid = 0; cuboid < allcuboids.Count; cuboid++)
+            {
+                for (int corner_pos = 0; corner_pos < 8; corner_pos++)
+                {
+                    for (int node = 0; node < allnodes.Count; node++)
+                    {
+                        if (allcuboids[cuboid].point_positions[corner_pos] == allnodes[node].mat_pos)
+                        {
+                            allcuboids[cuboid].nodes[corner_pos] = allnodes[node];
+                        }
                     }
                 }
             }
-        }
 
-        // create tetrahedra
-        for (int cuboid = 0; cuboid < allcuboids.Count; cuboid++)
-        {
-            alltetrahedra.AddRange(allcuboids[cuboid].GenerateTetrahedra());
-        }
-
-        // for each node, find all attached tetrahedra
-        foreach(Tetrahedron t in alltetrahedra)
-        {
-            foreach(Node n in t.GetNodes())
+            // create tetrahedra
+            for (int cuboid = 0; cuboid < allcuboids.Count; cuboid++)
             {
-                n.attached_elements.Add(t);
+                alltetrahedra.AddRange(allcuboids[cuboid].GenerateTetrahedra());
             }
-        }
 
-        // find neighbors
-        Node[] nodes_t1;
-        Node[] nodes_t2;
-        for (int t1 = 0; t1 < alltetrahedra.Count; t1++)
-        {
-            for(int t2 = 0; t2 < alltetrahedra.Count; t2++)
+            // for each node, find all attached tetrahedra
+            foreach (Tetrahedron t in alltetrahedra)
             {
-                if (t1 == t2) continue;
-                nodes_t1 = alltetrahedra[t1].GetNodes();
-                nodes_t2 = alltetrahedra[t2].GetNodes();
-                foreach (Node n1 in nodes_t1)
+                foreach (Node n in t.GetNodes())
                 {
-                    foreach(Node n2 in nodes_t2)
+                    if(!n.attached_elements.Contains(t))
+                        n.attached_elements.Add(t);
+                }
+            }
+
+            // find neighbors
+            Node[] nodes_t1;
+            Node[] nodes_t2;
+            for (int t1 = 0; t1 < alltetrahedra.Count; t1++)
+            {
+                for (int t2 = 0; t2 < alltetrahedra.Count; t2++)
+                {
+                    if (t1 == t2) continue;
+                    nodes_t1 = alltetrahedra[t1].GetNodes();
+                    nodes_t2 = alltetrahedra[t2].GetNodes();
+                    foreach (Node n1 in nodes_t1)
                     {
-                        if(n1.Equals(n2))
+                        foreach (Node n2 in nodes_t2)
                         {
-                            alltetrahedra[t1].AddNeighbor(alltetrahedra[t2], n1);
-                            alltetrahedra[t2].AddNeighbor(alltetrahedra[t1], n1);
+                            if (n1.Equals(n2))
+                            {
+                                alltetrahedra[t1].AddNeighbor(alltetrahedra[t2], n1);
+                                alltetrahedra[t2].AddNeighbor(alltetrahedra[t1], n1);
+                            }
                         }
                     }
                 }
             }
         }
+        else
+        {
+            Vector3 n1_mpos = new Vector3(-1.0f, 0.3f, 0.5f);
+            Node n1 = new Node(n1_mpos, gameObject.transform.position + n1_mpos);
+            allnodes.Add(n1);
 
+            Vector3 n2_mpos = new Vector3(-1.0f, 0.3f, -0.5f);
+            Node n2 = new Node(n2_mpos, gameObject.transform.position + n2_mpos);
+            allnodes.Add(n2);
+
+            Vector3 n3_mpos = new Vector3(1.0f, 0.3f, 0.0f);
+            Node n3 = new Node(n3_mpos, gameObject.transform.position + n3_mpos);
+            allnodes.Add(n3);
+
+            Vector3 n4_mpos = new Vector3(1.0f, -0.3f, 0.0f);
+            Node n4 = new Node(n4_mpos, gameObject.transform.position + n4_mpos);
+            allnodes.Add(n4);
+
+            Tetrahedron t1 = new Tetrahedron(n1, n2, n3, n4);
+            alltetrahedra.Add(t1);
+
+            foreach (Tetrahedron t in alltetrahedra)
+            {
+                foreach (Node n in t.GetNodes())
+                {
+                    if (!n.attached_elements.Contains(t))
+                        n.attached_elements.Add(t);
+                }
+            }
         Debug.Log("There are " + allnodes.Count + " Nodes and " + alltetrahedra.Count + " Tetrahedra.");
+        }
     }
 }
