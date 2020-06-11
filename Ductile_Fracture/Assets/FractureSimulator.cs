@@ -153,6 +153,7 @@ public class Node
 
     public void Crack(Vector3 world_position_of_cube)
     {
+        Debug.DrawRay(world_pos, new Vector3(fracture_plane_normal.At(0), fracture_plane_normal.At(1), fracture_plane_normal.At(2)), Color.red);
         Vector<float> world_pos_of_node = Vector<float>.Build.DenseOfArray(new float[] { world_pos.x, world_pos.y, world_pos.z });
         Vector<float> world_pos_of_cube = Vector<float>.Build.DenseOfArray(new float[] { world_position_of_cube.x, world_position_of_cube.y, world_position_of_cube.z });
 
@@ -677,7 +678,16 @@ public class Tetrahedron
         nodes[1] = n2;
         nodes[2] = n3;
         nodes[3] = n4;
-        beta = Beta();
+
+        beta = Matrix<float>.Build.DenseOfRowArrays(new float[][]
+        {
+            new float[] { nodes[0].mat_pos.x, nodes[1].mat_pos.x, nodes[2].mat_pos.x, nodes[3].mat_pos.x},
+            new float[] { nodes[0].mat_pos.y, nodes[1].mat_pos.y, nodes[2].mat_pos.y, nodes[3].mat_pos.y},
+            new float[] { nodes[0].mat_pos.z, nodes[1].mat_pos.z, nodes[2].mat_pos.z, nodes[3].mat_pos.z},
+            new float[] { 1.0f, 1.0f, 1.0f, 1.0f},
+        });
+
+        beta = beta.Inverse();
     }
 
     public List<Tuple<Node, Node, Vector<float>>> Intersect(Node n, Vector<float> normal_of_plane)
@@ -770,19 +780,6 @@ public class Tetrahedron
             new float[] { nodes[0].world_speed.y, nodes[1].world_speed.y, nodes[2].world_speed.y, nodes[3].world_speed.y},
             new float[] { nodes[0].world_speed.z, nodes[1].world_speed.z, nodes[2].world_speed.z, nodes[3].world_speed.z},
         });
-    }
-
-    public Matrix<float> Beta()
-    {
-        Matrix<float> beta = Matrix<float>.Build.DenseOfRowArrays(new float[][]
-        {
-            new float[] { nodes[0].mat_pos.x, nodes[1].mat_pos.x, nodes[2].mat_pos.x, nodes[3].mat_pos.x},
-            new float[] { nodes[0].mat_pos.y, nodes[1].mat_pos.y, nodes[2].mat_pos.y, nodes[3].mat_pos.y},
-            new float[] { nodes[0].mat_pos.z, nodes[1].mat_pos.z, nodes[2].mat_pos.z, nodes[3].mat_pos.z},
-            new float[] { 1.0f, 1.0f, 1.0f, 1.0f},
-        });
-
-        return beta.Inverse();
     }
 
     public Vector<float> LocInterp(Matrix<float> element_location, int i)
@@ -951,7 +948,7 @@ public class Tetrahedron
         {
             Vector<float> nev = evd_of_total_internal_stress.EigenVectors.Column(i);
             float nev_len = (float) nev.L2Norm();
-            nev.At(0, nev.At(0) / nev_len);
+            nev.At(0, nev.At(0) / nev_len); 
             nev.At(1, nev.At(1) / nev_len);
             nev.At(2, nev.At(2) / nev_len);
 
@@ -1059,7 +1056,7 @@ public class FractureSimulator : MonoBehaviour
 
     void Update()
     {
-        Vector3 x = new Vector3(0.1f * Time.deltaTime, -0.1f * Time.deltaTime, 0.1f * Time.deltaTime);
+        Vector3 x = new Vector3(0.01f * Time.deltaTime, 0.0f, 0.0f);
         allnodes[2].new_world_pos += x;
         foreach (Node n in allnodes)
         {
@@ -1221,6 +1218,7 @@ public class FractureSimulator : MonoBehaviour
         }
         else
         {
+            // TESTCASE 1
             Vector3 n1_mpos = new Vector3(-1.0f, 0.3f, 0.5f);
             Node n1 = new Node(n1_mpos, gameObject.transform.position + n1_mpos);
             allnodes.Add(n1);
@@ -1237,8 +1235,15 @@ public class FractureSimulator : MonoBehaviour
             Node n4 = new Node(n4_mpos, gameObject.transform.position + n4_mpos);
             allnodes.Add(n4);
 
+            Vector3 n5_mpos = new Vector3(1.0f, 0.6f, 0.0f);
+            Node n5 = new Node(n5_mpos, gameObject.transform.position + n5_mpos);
+            allnodes.Add(n5);
+
             Tetrahedron t1 = new Tetrahedron(n1, n2, n3, n4);
             alltetrahedra.Add(t1);
+
+            Tetrahedron t2 = new Tetrahedron(n1, n2, n3, n5);
+            alltetrahedra.Add(t2);
 
             foreach (Tetrahedron t in alltetrahedra)
             {
@@ -1248,7 +1253,11 @@ public class FractureSimulator : MonoBehaviour
                         n.attached_elements.Add(t);
                 }
             }
-        Debug.Log("There are " + allnodes.Count + " Nodes and " + alltetrahedra.Count + " Tetrahedra.");
+
+            // TESTCASE 2
+
+
+            Debug.Log("There are " + allnodes.Count + " Nodes and " + alltetrahedra.Count + " Tetrahedra.");
         }
     }
 }
