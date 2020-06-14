@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Collections;
 using System.Linq;
 using System;
 using UnityEngine;
@@ -31,20 +30,24 @@ public class MathUtility
         return true;
     }
 
-    public static Tuple<bool, Vector<float>> LinePlaneIntersection(Vector<float> n, Vector<float> normal, Vector<float> a, Vector<float> b)
+    public static Tuple<bool, bool, Vector<float>> LinePlaneIntersection(Vector<float> n, Vector<float> normal, Vector<float> a, Vector<float> b)
     {
         Vector<float> w = a - n;
         Vector<float> u = b - a;
         float length_of_edge = (float)u.L2Norm();
         float scalar = (-normal).DotProduct(w) / normal.DotProduct(u);
 
-        if (scalar >= 0.0f && scalar <= 1.0f)
+        if (scalar > 0.0f && scalar <= 1.0f)
         {
-            return new Tuple<bool, Vector<float>>(true, a + (u * scalar));
+            return new Tuple<bool, bool, Vector<float>>(true, false, a + (u * scalar));
+        }
+        else if(scalar == 0.0f)
+        {
+            return new Tuple<bool, bool, Vector<float>>(true, true, a + (u * scalar));
         }
         else
         {
-            return new Tuple<bool, Vector<float>>(false, null);
+            return new Tuple<bool, bool, Vector<float>>(false, false, null);
         }
     }
 
@@ -151,7 +154,7 @@ public class Node
         world_speed = new Vector3(0.0f, 0.0f, 0.0f);
     }
 
-    public void Crack(Vector3 world_position_of_cube)
+    public Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> Crack(Vector3 world_position_of_cube)
     {
         Debug.DrawRay(world_pos, new Vector3(fracture_plane_normal.At(0), fracture_plane_normal.At(1), fracture_plane_normal.At(2)), Color.red);
         Vector<float> world_pos_of_node = Vector<float>.Build.DenseOfArray(new float[] { world_pos.x, world_pos.y, world_pos.z });
@@ -170,12 +173,41 @@ public class Node
 
         foreach (Tetrahedron t in attached_elements)
         {
-            List<Tuple<Node, Node, Vector<float>>> intersection_points = new List<Tuple<Node, Node, Vector<float>>>();
-            intersection_points = t.Intersect(this, fracture_plane_normal);
+            // in here, we want to test each tetrahedron attached to this node for intersection with the
+            // fracture plane. This can result in different cases, which we all need to treat differently.
+            // Let's line up the cases:
+            // - no intersection (trivial)
+            // - fracture plane is coplanar to a face of the tetrahedron (trivial)
+            // - one edge of the tetrahedron lies inside the fracture plane (complex)
+            // - the fracture plane none of the above and cuts right through the tetrahedron (complex)
 
-            if (intersection_points.Count != 0)
+            // we can distinguish these cases by testing which edge of the tetrahedron intersects with the fracture plane.
+            Tuple<bool, List<Tuple<Node, Node, Vector<float>>>> intersection_data = t.Intersect(this, fracture_plane_normal);
+            List<Tuple<Node, Node, Vector<float>>> intersection_points = intersection_data.Item2;
+
+            if(intersection_points.Count == 3)
+            {
+                if(intersection_data.Item1)
+                {
+                    // the fracture plane is coplanar with a face of the tetrahedron t
+
+                    // try to find a neighboring tetrahedron that shares the nodes 
+                    // that are on the fracture plane / face that is being intersected.
+
+                }
+                else
+                {
+                    // one edge of the tetrahedron lies inside the fracture plane
+
+                }
+            }
+            else if (intersection_points.Count == 2)
             {
                 intersected_tets.Add(t, intersection_points);
+            }
+            else if(intersection_points.Count == 1)
+            {
+                Debug.Log("Just one intersection with the fracture plane.");
             }
             else
             {
@@ -267,6 +299,8 @@ public class Node
             Node kFive = new Node(new Vector3(kFiveMatPos.At(0), kFiveMatPos.At(1), kFiveMatPos.At(2)), new Vector3(kFiveWorldPos.At(0), kFiveWorldPos.At(1), kFiveWorldPos.At(2)));
             new_nodes.Add(kFour);
             new_nodes.Add(kFive);
+
+            // TODO add attached elements to new nodes
 
             // find one of the edges that cut the only quadriliteral face of the resulting polygon.
             // say 
@@ -467,8 +501,8 @@ public class Node
                 }
             }
         }
-        // TODO remove kZero from list of all nodes
-        // TODO update mat_pos to be world_pos
+        // TODO update mat_pos
+        return new Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>>(old_tetrahedra, new_tetrahedra, new_nodes);
     }
 
     public void AddTensileForce(Vector<float> tf)
@@ -690,10 +724,11 @@ public class Tetrahedron
         beta = beta.Inverse();
     }
 
-    public List<Tuple<Node, Node, Vector<float>>> Intersect(Node n, Vector<float> normal_of_plane)
+    public Tuple<bool, List<Tuple<Node, Node, Vector<float>>>> Intersect(Node n, Vector<float> normal_of_plane)
     {
         List<Tuple<Node, Node, Vector<float>>> intersection_points = new List<Tuple<Node, Node, Vector<float>>>();
         Vector<float> world_pos_of_n = Vector<float>.Build.DenseOfArray(new float[] { n.world_pos.x, n.world_pos.y, n.world_pos.z });
+        bool coplanar_with_face = false;
 
         // only do intersection for edges between nodes that are not n
         Node x, y, z;
@@ -707,15 +742,26 @@ public class Tetrahedron
         Vector<float> world_pos_of_y = Vector<float>.Build.DenseOfArray(new float[] { y.world_pos.x, y.world_pos.y, y.world_pos.z });
         Vector<float> world_pos_of_z = Vector<float>.Build.DenseOfArray(new float[] { z.world_pos.x, z.world_pos.y, z.world_pos.z });
 
-        Tuple<bool, Vector<float>> intersection_xy = MathUtility.LinePlaneIntersection(world_pos_of_n, normal_of_plane, world_pos_of_x, world_pos_of_y);
-        Tuple<bool, Vector<float>> intersection_xz = MathUtility.LinePlaneIntersection(world_pos_of_n, normal_of_plane, world_pos_of_x, world_pos_of_z);
-        Tuple<bool, Vector<float>> intersection_yz = MathUtility.LinePlaneIntersection(world_pos_of_n, normal_of_plane, world_pos_of_y, world_pos_of_z);
+        Tuple<bool, bool, Vector<float>> intersection_xy = MathUtility.LinePlaneIntersection(world_pos_of_n, normal_of_plane, world_pos_of_x, world_pos_of_y);
+        Tuple<bool, bool, Vector<float>> intersection_xz = MathUtility.LinePlaneIntersection(world_pos_of_n, normal_of_plane, world_pos_of_x, world_pos_of_z);
+        Tuple<bool, bool, Vector<float>> intersection_yz = MathUtility.LinePlaneIntersection(world_pos_of_n, normal_of_plane, world_pos_of_y, world_pos_of_z);
 
-        if (intersection_xy.Item1) intersection_points.Add(new Tuple<Node, Node, Vector<float>>(x, y, intersection_xy.Item2));
-        if (intersection_xz.Item1) intersection_points.Add(new Tuple<Node, Node, Vector<float>>(x, z, intersection_xz.Item2));
-        if (intersection_yz.Item1) intersection_points.Add(new Tuple<Node, Node, Vector<float>>(y, z, intersection_yz.Item2));
+        if (intersection_xy.Item1) intersection_points.Add(new Tuple<Node, Node, Vector<float>>(x, y, intersection_xy.Item3));
+        if (intersection_xz.Item1) intersection_points.Add(new Tuple<Node, Node, Vector<float>>(x, z, intersection_xz.Item3));
+        if (intersection_yz.Item1) intersection_points.Add(new Tuple<Node, Node, Vector<float>>(y, z, intersection_yz.Item3));
 
-        return intersection_points;
+        int node_on_plane_count = 0;
+        if (intersection_xy.Item2) node_on_plane_count++;
+        if (intersection_xz.Item2) node_on_plane_count++;
+        if (intersection_yz.Item2) node_on_plane_count++;
+
+        if(node_on_plane_count == 2)
+        {
+            coplanar_with_face = true;
+        }
+        Debug.Assert(node_on_plane_count <= 2, "The plane apparently has 4 nodes on it, check MathUtility.LinePlaneIntersection.");
+
+        return new Tuple<bool, List<Tuple<Node, Node, Vector<float>>>>(coplanar_with_face, intersection_points);
     }
 
     public Node[] GetNodes()
@@ -1056,7 +1102,7 @@ public class FractureSimulator : MonoBehaviour
 
     void Update()
     {
-        Vector3 x = new Vector3(0.01f * Time.deltaTime, 0.0f, 0.0f);
+        Vector3 x = new Vector3(0.0001f * Time.deltaTime, 0.0f, 0.0f);
         allnodes[2].new_world_pos += x;
         foreach (Node n in allnodes)
         {
@@ -1070,16 +1116,31 @@ public class FractureSimulator : MonoBehaviour
             t.UpdateInternalForcesOfNodes(GLASS_DILATION, GLASS_RIGIDITY, GLASS_PHI, GLASS_PSI);
         }
 
-        foreach (Node n in allnodes)
+        int node_count = allnodes.Count;
+        List<Node> nodes_to_be_removed = new List<Node>();
+        for(int i = 0; i < node_count; i++)
         {
+            Node n = allnodes[i];
             if (n.DoesCrackOccur(GLASS_TOUGHNESS))
             {
+                nodes_to_be_removed.Add(n);
                 Debug.Log("Crack occured at Node " + n.mat_pos.x + " " + n.mat_pos.y + " " + n.mat_pos.z);
                 Instantiate(sphere, n.world_pos, Quaternion.identity);
 
-                n.Crack(transform.position);
+                Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> updated_tets_and_nodes = n.Crack(transform.position);
+                foreach(Tetrahedron t in updated_tets_and_nodes.Item1)
+                {
+                    alltetrahedra.Remove(t);
+                }
+                alltetrahedra.AddRange(updated_tets_and_nodes.Item2);
+                allnodes.AddRange(updated_tets_and_nodes.Item3);
             }
             n.ClearTensileAndCompressiveForces();
+        }
+
+        foreach(Node n in nodes_to_be_removed)
+        {
+            allnodes.Remove(n);
         }
 
         foreach (Tetrahedron t in alltetrahedra)
