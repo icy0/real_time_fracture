@@ -12,6 +12,8 @@ GameObject:
   - component: {fileID: 144360899951947710}
   - component: {fileID: 144360899951947705}
   - component: {fileID: 144360899951947704}
+  - component: {fileID: 3079248660160872651}
+  - component: {fileID: -1428438279695370644}
   m_Layer: 0
   m_Name: NodePrefab
   m_TagString: FEM_Node
@@ -59,7 +61,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 6304c22286e63bc43b1b79eb15211043, type: 2}
+  - {fileID: 2100000, guid: 25054d0b2cf514748a2fb66a910131ca, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -93,3 +95,31 @@ SphereCollider:
   serializedVersion: 2
   m_Radius: 0.5
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &3079248660160872651
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 144360899951947707}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b62b259b6930d9047a375daa5b6fc895, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &-1428438279695370644
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 144360899951947707}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f05e3cf06d2528645a076f7f323d881d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  node_prefab: {fileID: 144360899951947711}
+  old_world_position: {x: 0, y: 0, z: 0}
+  velocity: {x: 0, y: 0, z: 0}
+  attached_elements: []
