@@ -21,7 +21,7 @@ public class Node : MonoBehaviour
     public void Start()
     {
         velocity = new Vector3(0.0f, 0.0f, 0.0f);
-        old_world_position = new Vector3(0.0f, 0.0f, 0.0f);
+        old_world_position = transform.position;
     }
 
     public Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> Crack(Vector3 world_position_of_cube)

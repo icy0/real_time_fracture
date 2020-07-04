@@ -47,6 +47,8 @@ public class FractureSimulator : MonoBehaviour
             GameObject tetrahedron_go = tetrahedra[tetrahedron_index];
             alltetrahedra.Add(tetrahedron_go.GetComponent<Tetrahedron>());
         }
+
+        Debug.Log("There are " + alltetrahedra.Count + " Tetrahedra and " + allnodes.Count + " Nodes.");
     }
 
     void Update()
