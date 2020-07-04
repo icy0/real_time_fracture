@@ -77,7 +77,7 @@ public class MathUtility
 
     public static int GetIndexOf(Tetrahedron x, Node n)
     {
-        Node[] nodes = x.GetNodes();
+        Node[] nodes = x.nodes;
         int index = -1;
 
         for (int i = 0; i < 4; i++)

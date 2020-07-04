@@ -42,7 +42,7 @@ public class FractureSimulator : MonoBehaviour
             allnodes.Add(node_go.GetComponent<Node>());
         }
 
-        for (int tetrahedron_index = 0; tetrahedron_index < nodes.Length; tetrahedron_index++)
+        for (int tetrahedron_index = 0; tetrahedron_index < tetrahedra.Length; tetrahedron_index++)
         {
             GameObject tetrahedron_go = tetrahedra[tetrahedron_index];
             alltetrahedra.Add(tetrahedron_go.GetComponent<Tetrahedron>());
@@ -68,25 +68,28 @@ public class FractureSimulator : MonoBehaviour
 
         // check if any node exceeds its deformation limit
         int node_count = allnodes.Count;
-        for(int i = 0; i < node_count; i++)
+        for (int i = 0; i < node_count; i++)
         {
             Node n = allnodes[i];
             if (n.DoesCrackOccur(current.toughness))
             {
-                nodes_to_be_removed.Add(n);
+                //nodes_to_be_removed.Add(n);
 
-                Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> updated_tets_and_nodes = n.Crack(transform.position);
-                foreach(Tetrahedron t in updated_tets_and_nodes.Item1)
-                {
-                    alltetrahedra.Remove(t);
-                }
-                alltetrahedra.AddRange(updated_tets_and_nodes.Item2);
-                allnodes.AddRange(updated_tets_and_nodes.Item3);
+                //Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> updated_tets_and_nodes = n.Crack(transform.position);
+                //foreach (Tetrahedron t in updated_tets_and_nodes.Item1)
+                //{
+                //    alltetrahedra.Remove(t);
+                //}
+                //alltetrahedra.AddRange(updated_tets_and_nodes.Item2);
+                //allnodes.AddRange(updated_tets_and_nodes.Item3);
+                //RelationManager relation_manager = GameObject.Find("FEM_Mesh").GetComponent<RelationManager>();
+                //relation_manager.UpdateRelations();
+                Debug.Log("Crack occurs");
             }
             n.ClearTensileAndCompressiveForces();
         }
 
-        foreach(Node n in nodes_to_be_removed)
+        foreach (Node n in nodes_to_be_removed)
         {
             allnodes.Remove(n);
         }

@@ -9,10 +9,10 @@ using MathNet.Numerics.LinearAlgebra.Factorization;
 public class Tetrahedron : MonoBehaviour
 {
     public Node[] nodes = new Node[4];
-    Matrix<float> beta;
+    public List<Transform> node_transforms = new List<Transform>();
     public Dictionary<Tetrahedron, List<Node>> neighbors = new Dictionary<Tetrahedron, List<Node>>();
 
-    public List<Transform> node_transforms = new List<Transform>();
+    private Matrix<float> beta;
 
     public void AddNode(Transform n)
     {
@@ -72,24 +72,13 @@ public class Tetrahedron : MonoBehaviour
         return new Tuple<bool, List<Tuple<Node, Node, Vector<float>>>>(coplanar_with_face, intersection_points);
     }
 
-    public Node[] GetNodes()
-    {
-        return nodes;
-    }
-
     public void SwapNodes(Node tbs, Node new_node)
     {
-        int index_of_tbs = -1;
-        for (int i = 0; i < 4; i++)
-        {
-            if (nodes[i].Equals(tbs))
-            {
-                index_of_tbs = i;
-            }
-        }
-
+        int index_of_tbs = MathUtility.GetIndexOf(this, tbs);
         Debug.Assert(index_of_tbs != -1);
+
         nodes[index_of_tbs] = new_node;
+        node_transforms[index_of_tbs] = new_node.transform;
     }
 
     public void DrawEdges()
