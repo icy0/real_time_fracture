@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using System;
 using UnityEngine;
+using MathNet.Numerics.LinearAlgebra;
+using MathNet.Numerics.LinearAlgebra.Factorization;
 
 
 public class FractureSimulator : MonoBehaviour
@@ -49,6 +51,33 @@ public class FractureSimulator : MonoBehaviour
         }
 
         Debug.Log("There are " + alltetrahedra.Count + " Tetrahedra and " + allnodes.Count + " Nodes.");
+
+        foreach(GameObject n in nodes)
+        {
+            if (n.GetComponent<Node>().crack_at_start)
+            {
+                n.GetComponent<Node>().fracture_plane_normal = GetNormalFromPlane(GameObject.Find("Fracture_Plane"));
+                Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> result = n.GetComponent<Node>().Crack(n.transform.parent.position);
+
+                // update tetrahedra collections
+                foreach(Tetrahedron t in result.Item1)
+                {
+                    alltetrahedra.Remove(t);
+                }
+                alltetrahedra.AddRange(result.Item2);
+
+                // update node collections
+                allnodes.Remove(n.GetComponent<Node>());
+                allnodes.AddRange(result.Item3);
+                break;
+            }
+        }
+    }
+
+    Vector<float> GetNormalFromPlane(GameObject fracture_plane)
+    {
+        Vector3 normal = fracture_plane.transform.up;
+        return Vector<float>.Build.DenseOfArray(new float[] { normal.x, normal.y, normal.z});
     }
 
     void Update()

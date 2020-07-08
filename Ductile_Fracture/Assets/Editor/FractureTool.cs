@@ -9,6 +9,9 @@ using MathNet.Numerics.LinearAlgebra.Complex;
 
 public class FractureTool : EditorWindow, IPositionChangeListener
 {
+    Material tetrahedron_material = null;
+    GameObject fracture_plane_prefab = null;
+
     [MenuItem("Window/Fracture Tool")]
     static void OpenWindow()
     {
@@ -62,23 +65,34 @@ public class FractureTool : EditorWindow, IPositionChangeListener
 
     private void OnGUI()
     {
+
+        tetrahedron_material = (Material)EditorGUI.ObjectField(new Rect(3, 100, position.width - 6, 20), "Tetrahedron Material", tetrahedron_material, typeof(Material));
+        if(tetrahedron_material != null)
+        {
+            TetrahedronBuilder.tet_material = tetrahedron_material;
+        }
+        fracture_plane_prefab = (GameObject)EditorGUI.ObjectField(new Rect(3, 120, position.width - 6, 20), "Fracture Plane", fracture_plane_prefab, typeof(GameObject));
+        if (fracture_plane_prefab != null)
+        {
+        }
+
         if (GUILayout.Button("Generate Tetrahedron"))
         {
             GameObject[] selected_gameobjects = Selection.gameObjects;
-            if(selected_gameobjects.Length == 4)
+            if (selected_gameobjects.Length == 4)
             {
                 GameObject.Find("FEM_Mesh").GetComponent<TetrahedronBuilder>().GenerateTetrahedron(selected_gameobjects);
                 GameObject.Find("FEM_Mesh").GetComponent<RelationManager>().UpdateRelations();
             }
         }
-        if(GUILayout.Button("Invert current Tetrahedra"))
+        if (GUILayout.Button("Invert current Tetrahedra"))
         {
             GameObject[] selected_gameobjects = Selection.gameObjects;
-            foreach(GameObject selected_gameobject in selected_gameobjects)
+            foreach (GameObject selected_gameobject in selected_gameobjects)
             {
                 Mesh mesh = selected_gameobject.GetComponent<MeshFilter>().sharedMesh;
                 int[] triangles = mesh.triangles;
-                for(int i = 0; i < triangles.Length; i += 3)
+                for (int i = 0; i < triangles.Length; i += 3)
                 {
                     int temp = triangles[i + 1];
                     triangles[i + 1] = triangles[i + 2];
@@ -89,9 +103,21 @@ public class FractureTool : EditorWindow, IPositionChangeListener
                 mesh.RecalculateNormals();
             }
         }
-        if(GUILayout.Button("Update Relations"))
+        if (GUILayout.Button("Update Relations"))
         {
             GameObject.Find("FEM_Mesh").GetComponent<RelationManager>().UpdateRelations();
+        }
+        if (GUILayout.Button("Spawn Fracture Plane at Node"))
+        {
+            // TODO make the user place the fracture plane
+            // TODO call Crack() on that node
+
+            GameObject[] selected_gameobjects = Selection.gameObjects;
+            if (selected_gameobjects.Length == 1 && selected_gameobjects[0].tag == "FEM_Node")
+            {
+                GameObject fracture_plane_previsual = Instantiate(fracture_plane_prefab, selected_gameobjects[0].transform.position, Quaternion.identity);
+                fracture_plane_previsual.name = "Fracture_Plane";
+            }
         }
     }
 }

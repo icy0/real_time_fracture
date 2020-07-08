@@ -4,6 +4,7 @@ using UnityEngine;
 
 public class TetrahedronBuilder : MonoBehaviour
 {
+    public static Material tet_material;
     private bool RayTriangleIntersection(Vector3 ray_origin, Vector3 ray_direction, Vector3[] triangle_vertices)
     {
         Debug.Assert(triangle_vertices.Length == 3);
@@ -95,8 +96,7 @@ public class TetrahedronBuilder : MonoBehaviour
         tetrahedron_mesh.normals = normals;
         tetrahedron_go.AddComponent<MeshFilter>().mesh = tetrahedron_mesh;
         MeshRenderer mesh_renderer = tetrahedron_go.AddComponent<MeshRenderer>();
-        mesh_renderer.sharedMaterial = selected_gameobjects[0].GetComponent<MeshRenderer>().sharedMaterial;
-        mesh_renderer.material.color = Color.green;
+        mesh_renderer.sharedMaterial = tet_material;
         tetrahedron_go.tag = "FEM_Tetrahedron";
 
         Tetrahedron tetrahedron = tetrahedron_go.AddComponent<Tetrahedron>();

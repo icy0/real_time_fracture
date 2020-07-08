@@ -9,6 +9,9 @@ public class Node : MonoBehaviour
     [SerializeField]
     private Transform node_prefab;
 
+    [SerializeField]
+    public bool crack_at_start;
+
     public Vector3 old_world_position;
     public Vector3 velocity;
 
