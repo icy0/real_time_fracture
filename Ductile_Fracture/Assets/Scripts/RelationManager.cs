@@ -8,6 +8,7 @@ public class RelationManager : MonoBehaviour
     {
         UpdateRelations();
     }
+
     public void UpdateRelations()
     {
         GameObject[] node_gos = GameObject.FindGameObjectsWithTag("FEM_Node");

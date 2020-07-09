@@ -52,6 +52,7 @@ public class FractureSimulator : MonoBehaviour
 
         Debug.Log("There are " + alltetrahedra.Count + " Tetrahedra and " + allnodes.Count + " Nodes.");
 
+        // DEBUG CODE:
         foreach(GameObject n in nodes)
         {
             if (n.GetComponent<Node>().crack_at_start)
@@ -63,11 +64,13 @@ public class FractureSimulator : MonoBehaviour
                 foreach(Tetrahedron t in result.Item1)
                 {
                     alltetrahedra.Remove(t);
+                    DestroyImmediate(t.gameObject);
                 }
                 alltetrahedra.AddRange(result.Item2);
 
                 // update node collections
                 allnodes.Remove(n.GetComponent<Node>());
+                DestroyImmediate(n.gameObject);
                 allnodes.AddRange(result.Item3);
                 break;
             }

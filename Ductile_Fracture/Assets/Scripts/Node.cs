@@ -96,6 +96,7 @@ public class Node : MonoBehaviour
             kZeroPlus = kZeroPlus_go.GetComponent<Node>();
             kZeroMinus = kZeroMinus_go.GetComponent<Node>();
         }
+        // TODO else return?
 
         // some debug information
         // ======================================================================================================================================
@@ -512,6 +513,7 @@ public class Node : MonoBehaviour
                 }
             }
         }
+        relation_manager.UpdateRelations();
         return new Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>>(old_tetrahedra, new_tetrahedra, new_nodes);
     }
 

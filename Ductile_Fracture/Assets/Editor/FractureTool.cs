@@ -65,7 +65,6 @@ public class FractureTool : EditorWindow, IPositionChangeListener
 
     private void OnGUI()
     {
-
         tetrahedron_material = (Material)EditorGUI.ObjectField(new Rect(3, 100, position.width - 6, 20), "Tetrahedron Material", tetrahedron_material, typeof(Material));
         if(tetrahedron_material != null)
         {

@@ -60,21 +60,23 @@ public class TetrahedronBuilder : MonoBehaviour
             FindTriangleNormal(triangles[2]),
             FindTriangleNormal(triangles[3]) };
 
-        for (int i = 0; i < 4; i++)
-        {
-            Vector3[] triangle = triangles[i];
-            Vector3 some_point_on_current_triangle = triangle[0] + ((triangle[1] - triangle[0]) * 0.5f) + ((triangle[2] - triangle[1]) * 0.3f);
+        // we take the first triangle and find the node which is not on it
 
-            if (RayTriangleIntersection(some_point_on_current_triangle, normals[i], triangles[(i + 1) % 4])
-                || RayTriangleIntersection(some_point_on_current_triangle, normals[i], triangles[(i + 2) % 4])
-                || RayTriangleIntersection(some_point_on_current_triangle, normals[i], triangles[(i + 3) % 4]))
-            {
-                int temp = vertex_indices[(i * 3) + 1];
-                vertex_indices[(i * 3) + 1] = vertex_indices[(i * 3) + 2];
-                vertex_indices[(i * 3) + 2] = temp;
-                normals[i] = -normals[i];
-            }
-        }
+        //for (int i = 0; i < 4; i++)
+        //{
+        //    Vector3[] triangle = triangles[i];
+        //    Vector3 some_point_on_current_triangle = triangle[0] + ((triangle[1] - triangle[0]) * 0.5f) + ((triangle[2] - triangle[1]) * 0.3f);
+
+        //    if (RayTriangleIntersection(some_point_on_current_triangle, normals[i], triangles[(i + 1) % 4])
+        //        || RayTriangleIntersection(some_point_on_current_triangle, normals[i], triangles[(i + 2) % 4])
+        //        || RayTriangleIntersection(some_point_on_current_triangle, normals[i], triangles[(i + 3) % 4]))
+        //    {
+        //        int temp = vertex_indices[(i * 3) + 1];
+        //        vertex_indices[(i * 3) + 1] = vertex_indices[(i * 3) + 2];
+        //        vertex_indices[(i * 3) + 2] = temp;
+        //        normals[i] = -normals[i];
+        //    }
+        //}
     }
 
     public GameObject GenerateTetrahedron(GameObject[] selected_gameobjects)
@@ -96,7 +98,8 @@ public class TetrahedronBuilder : MonoBehaviour
         tetrahedron_mesh.normals = normals;
         tetrahedron_go.AddComponent<MeshFilter>().mesh = tetrahedron_mesh;
         MeshRenderer mesh_renderer = tetrahedron_go.AddComponent<MeshRenderer>();
-        mesh_renderer.sharedMaterial = tet_material;
+        //mesh_renderer.sharedMaterial = tet_material; 
+        mesh_renderer.sharedMaterial = Resources.Load("Materials/Tetrahedron", typeof(Material)) as Material;
         tetrahedron_go.tag = "FEM_Tetrahedron";
 
         Tetrahedron tetrahedron = tetrahedron_go.AddComponent<Tetrahedron>();
@@ -105,7 +108,7 @@ public class TetrahedronBuilder : MonoBehaviour
             tetrahedron.AddNode(selected_gameobjects[i].transform);
         }
 
-        //tetrahedron.AddComponent<FaceNormalDebugger>();
+        tetrahedron.gameObject.AddComponent<FaceNormalDebugger>();
         return tetrahedron_go;
     }
 }
