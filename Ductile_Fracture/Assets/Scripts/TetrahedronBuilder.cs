@@ -60,23 +60,27 @@ public class TetrahedronBuilder : MonoBehaviour
             FindTriangleNormal(triangles[2]),
             FindTriangleNormal(triangles[3]) };
 
-        // we take the first triangle and find the node which is not on it
+        Vector3 not_on_first_triangle = vertices[3];
+        Vector3 on_first_triangle = vertices[0];
 
-        //for (int i = 0; i < 4; i++)
-        //{
-        //    Vector3[] triangle = triangles[i];
-        //    Vector3 some_point_on_current_triangle = triangle[0] + ((triangle[1] - triangle[0]) * 0.5f) + ((triangle[2] - triangle[1]) * 0.3f);
+        if (Vector3.Dot(normals[0], not_on_first_triangle - on_first_triangle) > 0)
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3[] triangle = triangles[i];
+                Vector3 some_point_on_current_triangle = triangle[0] + ((triangle[1] - triangle[0]) * 0.5f) + ((triangle[2] - triangle[1]) * 0.3f);
 
-        //    if (RayTriangleIntersection(some_point_on_current_triangle, normals[i], triangles[(i + 1) % 4])
-        //        || RayTriangleIntersection(some_point_on_current_triangle, normals[i], triangles[(i + 2) % 4])
-        //        || RayTriangleIntersection(some_point_on_current_triangle, normals[i], triangles[(i + 3) % 4]))
-        //    {
-        //        int temp = vertex_indices[(i * 3) + 1];
-        //        vertex_indices[(i * 3) + 1] = vertex_indices[(i * 3) + 2];
-        //        vertex_indices[(i * 3) + 2] = temp;
-        //        normals[i] = -normals[i];
-        //    }
-        //}
+                if (RayTriangleIntersection(some_point_on_current_triangle, normals[i], triangles[(i + 1) % 4])
+                    || RayTriangleIntersection(some_point_on_current_triangle, normals[i], triangles[(i + 2) % 4])
+                    || RayTriangleIntersection(some_point_on_current_triangle, normals[i], triangles[(i + 3) % 4]))
+                {
+                    int temp = vertex_indices[(i * 3) + 1];
+                    vertex_indices[(i * 3) + 1] = vertex_indices[(i * 3) + 2];
+                    vertex_indices[(i * 3) + 2] = temp;
+                    normals[i] = -normals[i];
+                }
+            }
+        }
     }
 
     public GameObject GenerateTetrahedron(GameObject[] selected_gameobjects)
@@ -108,7 +112,7 @@ public class TetrahedronBuilder : MonoBehaviour
             tetrahedron.AddNode(selected_gameobjects[i].transform);
         }
 
-        tetrahedron.gameObject.AddComponent<FaceNormalDebugger>();
+        //tetrahedron.gameObject.AddComponent<FaceNormalDebugger>();
         return tetrahedron_go;
     }
 }
