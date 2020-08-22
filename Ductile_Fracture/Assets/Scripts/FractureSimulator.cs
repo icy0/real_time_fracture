@@ -35,6 +35,7 @@ public class FractureSimulator : MonoBehaviour
 
     void Start()
     {
+        Time.fixedDeltaTime = 1f;
         GameObject[] nodes = GameObject.FindGameObjectsWithTag("FEM_Node");
         GameObject[] tetrahedra = GameObject.FindGameObjectsWithTag("FEM_Tetrahedron");
 
@@ -83,7 +84,7 @@ public class FractureSimulator : MonoBehaviour
         return Vector<float>.Build.DenseOfArray(new float[] { normal.x, normal.y, normal.z});
     }
 
-    void Update()
+    private void FixedUpdate()
     {
         // calculate velocity of each node
         foreach (Node n in allnodes)
@@ -107,17 +108,18 @@ public class FractureSimulator : MonoBehaviour
             Node n = allnodes[i];
             if (n.DoesCrackOccur(current.toughness))
             {
-                //nodes_to_be_removed.Add(n);
+                nodes_to_be_removed.Add(n);
+                Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> updated_tets_and_nodes = n.Crack(transform.position);
 
-                //Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> updated_tets_and_nodes = n.Crack(transform.position);
-                //foreach (Tetrahedron t in updated_tets_and_nodes.Item1)
-                //{
-                //    alltetrahedra.Remove(t);
-                //}
-                //alltetrahedra.AddRange(updated_tets_and_nodes.Item2);
-                //allnodes.AddRange(updated_tets_and_nodes.Item3);
-                //RelationManager relation_manager = GameObject.Find("FEM_Mesh").GetComponent<RelationManager>();
-                //relation_manager.UpdateRelations();
+                foreach (Tetrahedron t in updated_tets_and_nodes.Item1)
+                {
+                    alltetrahedra.Remove(t);
+                    DestroyImmediate(t.gameObject);
+                }
+                alltetrahedra.AddRange(updated_tets_and_nodes.Item2);
+                allnodes.AddRange(updated_tets_and_nodes.Item3);
+                RelationManager relation_manager = GameObject.Find("FEM_Mesh").GetComponent<RelationManager>();
+                relation_manager.UpdateRelations();
                 Debug.Log("Crack occurs");
             }
             n.ClearTensileAndCompressiveForces();
@@ -126,6 +128,11 @@ public class FractureSimulator : MonoBehaviour
         foreach (Node n in nodes_to_be_removed)
         {
             allnodes.Remove(n);
+            DestroyImmediate(n.gameObject);
         }
+    }
+
+    void Update()
+    {
     }
 }

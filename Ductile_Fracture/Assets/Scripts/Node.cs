@@ -96,7 +96,10 @@ public class Node : MonoBehaviour
             kZeroPlus = kZeroPlus_go.GetComponent<Node>();
             kZeroMinus = kZeroMinus_go.GetComponent<Node>();
         }
-        // TODO else return?
+        else
+        {
+            return new Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>>(old_tetrahedra, new_tetrahedra, new_nodes);
+        }
 
         // some debug information
         // ======================================================================================================================================
@@ -132,6 +135,7 @@ public class Node : MonoBehaviour
             {
                 not_hit_t.SwapNodes(this, kZeroMinus);
             }
+            relation_manager.UpdateRelations();
         }
 
         // for each three point intersected tetrahedron:
@@ -237,6 +241,7 @@ public class Node : MonoBehaviour
 
                 // TODO ...
             }
+            relation_manager.UpdateRelations();
         }
 
         // for each two point intersected tetrahedron:
@@ -512,7 +517,9 @@ public class Node : MonoBehaviour
                     new_tetrahedra.Add(n_t3);
                 }
             }
+            relation_manager.UpdateRelations();
         }
+
         relation_manager.UpdateRelations();
         return new Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>>(old_tetrahedra, new_tetrahedra, new_nodes);
     }
@@ -563,7 +570,8 @@ public class Node : MonoBehaviour
             sumOfMOfCompressiveForces += MathUtility.M(cf);
         }
 
-        Matrix<float> st = (1 / 2.0f) * (-MathUtility.M(sumOverTensileForces) + sumOfMOfTensileForces + MathUtility.M(sumOverCompressiveForces) - sumOfMOfCompressiveForces);
+        Matrix<float> st = -MathUtility.M(sumOverTensileForces) + sumOfMOfTensileForces + MathUtility.M(sumOverCompressiveForces) - sumOfMOfCompressiveForces;
+        st /= 1 / 2.0f;
 
         Debug.Assert(st.IsSymmetric(), "The fracture tensor is not symmetric, but it should be.");
         Evd<float> evd = st.Evd(Symmetricity.Symmetric);
@@ -598,6 +606,10 @@ public class Node : MonoBehaviour
                 debug_worked = true;
             }
             Debug.Assert(debug_worked);
+            if(!debug_worked)
+            {
+                Debug.Log("Eigenvalues were: " + evd);
+            }
             return true;
         }
 

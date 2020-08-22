@@ -12,6 +12,7 @@ public class Tetrahedron : MonoBehaviour
     public List<Transform> node_transforms = new List<Transform>();
     public Dictionary<Tetrahedron, List<Node>> neighbors = new Dictionary<Tetrahedron, List<Node>>();
 
+    public float volume;
     private Matrix<float> beta;
 
     public void AddNode(Transform n)
@@ -257,6 +258,7 @@ public class Tetrahedron : MonoBehaviour
         return ElasticStressDueToStrain(dilation, rigidity, li0, li1, li2) + ViscousStressDueToStrainRate(phi, psi, element_speed, li0, li1, li2);
     }
 
+    // TODO assumption is made here: that Eigenvectors.Column(i) is corresponding to Eigenvalue.At(i). this is not necessarily correct.
     public Matrix<float> TensileComponentOfTotalInternalStress(Evd<float> evd_of_total_internal_stress)
     {
         Matrix<float> tcotis = Matrix<float>.Build.DenseOfRowArrays(new float[][]
@@ -273,7 +275,7 @@ public class Tetrahedron : MonoBehaviour
             nev.At(1, nev.At(1) / nev_len);
             nev.At(2, nev.At(2) / nev_len);
 
-            tcotis += Mathf.Max(0.0f, (float)evd_of_total_internal_stress.EigenValues.At(i).Real) * MathUtility.M(nev);
+            tcotis += Mathf.Max(0.0f, (float) evd_of_total_internal_stress.EigenValues.At(i).Real) * MathUtility.M(nev);
         }
 
         return tcotis;
@@ -366,7 +368,7 @@ public class Tetrahedron : MonoBehaviour
         Matrix<float> total_internal_stress = TotalInternalStress(dilation, rigidity, phi, psi);
         Debug.Assert(total_internal_stress.IsSymmetric(), "The total internal stress tensor is not symmetric.");
         Evd<float> evd_of_total_internal_stress = total_internal_stress.Evd(Symmetricity.Symmetric);
-        float volume = Volume();
+        volume = Volume();
 
         for (int i = 0; i < 4; i++)
         {

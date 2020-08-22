@@ -14,6 +14,21 @@ public class RelationManager : MonoBehaviour
         GameObject[] node_gos = GameObject.FindGameObjectsWithTag("FEM_Node");
         GameObject[] tetrahedron_gos = GameObject.FindGameObjectsWithTag("FEM_Tetrahedron");
 
+        foreach(GameObject node_go in node_gos)
+        {
+            Node node = node_go.GetComponent<Node>();
+            int length_of_attached_elements = node.attached_elements.Count;
+            for(int attached_element = 0; attached_element < length_of_attached_elements; attached_element++)
+            {
+                if(node.attached_elements[attached_element] == null)
+                {
+                    node.attached_elements.RemoveAt(attached_element);
+                    attached_element--;
+                    length_of_attached_elements--;
+                }
+            }
+        }
+
         for (int tetrahedron_index = 0; tetrahedron_index < tetrahedron_gos.Length; tetrahedron_index++)
         {
             GameObject tetrahedron_go = tetrahedron_gos[tetrahedron_index];
