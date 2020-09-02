@@ -7,6 +7,8 @@ using MathNet.Numerics.LinearAlgebra.Factorization;
 
 public class FractureSimulator : MonoBehaviour
 {
+    RelationManager relation_manager;
+
     private class Material
     {
         public float dilation;
@@ -35,7 +37,9 @@ public class FractureSimulator : MonoBehaviour
 
     void Start()
     {
-        Time.fixedDeltaTime = 1f;
+        relation_manager = GameObject.Find("FEM_Mesh").GetComponent<RelationManager>();
+        relation_manager.UpdateRelations();
+        Time.fixedDeltaTime = 0.1f;
         GameObject[] nodes = GameObject.FindGameObjectsWithTag("FEM_Node");
         GameObject[] tetrahedra = GameObject.FindGameObjectsWithTag("FEM_Tetrahedron");
 
@@ -89,7 +93,7 @@ public class FractureSimulator : MonoBehaviour
         // calculate velocity of each node
         foreach (Node n in allnodes)
         {
-            n.velocity = (n.transform.position - n.old_world_position) / Time.deltaTime;
+            n.velocity = (n.transform.position - n.old_world_position) / Time.deltaTime; // not sure if division by time or multiplication with time
             n.old_world_position = n.transform.position;
         }
 
@@ -118,7 +122,6 @@ public class FractureSimulator : MonoBehaviour
                 }
                 alltetrahedra.AddRange(updated_tets_and_nodes.Item2);
                 allnodes.AddRange(updated_tets_and_nodes.Item3);
-                RelationManager relation_manager = GameObject.Find("FEM_Mesh").GetComponent<RelationManager>();
                 relation_manager.UpdateRelations();
                 Debug.Log("Crack occurs");
             }
@@ -129,6 +132,8 @@ public class FractureSimulator : MonoBehaviour
         {
             allnodes.Remove(n);
             DestroyImmediate(n.gameObject);
+            // TODO does the following introduce any changes? because it shouldn't.
+            relation_manager.UpdateRelations();
         }
     }
 

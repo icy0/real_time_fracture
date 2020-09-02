@@ -111,6 +111,13 @@ public class TetrahedronBuilder : MonoBehaviour
         {
             tetrahedron.AddNode(selected_gameobjects[i].transform);
         }
+        
+        for(int i = 0; i < 4; i++)
+        {
+            tetrahedron.nodes[i] = tetrahedron.node_transforms[i].GetComponent<Node>();
+        }
+
+        tetrahedron.Beta();
 
         //tetrahedron.gameObject.AddComponent<FaceNormalDebugger>();
         return tetrahedron_go;

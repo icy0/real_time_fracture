@@ -120,6 +120,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   node_prefab: {fileID: 144360899951947711}
+  crack_at_start: 0
   old_world_position: {x: 0, y: 0, z: 0}
   velocity: {x: 0, y: 0, z: 0}
   attached_elements: []

@@ -22,6 +22,11 @@ public class Tetrahedron : MonoBehaviour
 
     public void Start()
     {
+        Beta();
+    }
+
+    public void Beta()
+    {
         beta = Matrix<float>.Build.DenseOfRowArrays(new float[][]
         {
             new float[] { nodes[0].transform.localPosition.x, nodes[1].transform.localPosition.x, nodes[2].transform.localPosition.x, nodes[3].transform.localPosition.x},
@@ -130,6 +135,9 @@ public class Tetrahedron : MonoBehaviour
     {
         Vector<float> kron_delta_vector = MathUtility.KroneckerDeltaVector(i + 1);
         Debug.Assert(kron_delta_vector.Count == 4);
+        Debug.Assert(element_location != null);
+        Debug.Assert(beta != null, "Beta was null. Have a look at " + this.name);
+        Debug.Assert(kron_delta_vector != null);
 
         return element_location * beta * kron_delta_vector;
     }
@@ -367,6 +375,7 @@ public class Tetrahedron : MonoBehaviour
     {
         Matrix<float> total_internal_stress = TotalInternalStress(dilation, rigidity, phi, psi);
         Debug.Assert(total_internal_stress.IsSymmetric(), "The total internal stress tensor is not symmetric.");
+
         Evd<float> evd_of_total_internal_stress = total_internal_stress.Evd(Symmetricity.Symmetric);
         volume = Volume();
 

@@ -17,6 +17,15 @@ public class MathUtility
         return Vector<float>.Build.DenseOfArray(new float[] { x.x, x.y, x.z });
     }
 
+    public static Vector<float> ProjectOnto(Vector<float> a, Vector<float> b)
+    {
+        Vector<float> projection = Vector<float>.Build.DenseOfArray(new float[] { 0.0f, 0.0f, 0.0f });
+
+        projection = (a.DotProduct(b) / b.DotProduct(b)) * b;
+
+        return projection;
+    }
+
     public static bool EqualsRoughly(Vector<float> x, Vector<float> y, float maximum_difference)
     {
         Debug.Assert(x != null);

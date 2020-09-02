@@ -27,10 +27,22 @@ public class Node : MonoBehaviour
         old_world_position = transform.position;
     }
 
-    public Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> Crack(Vector3 world_position_of_cube)
+    public Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> Crack(Vector3 world_position_of_simulated_object)
     {
-        Vector<float> world_pos_of_node = Vector<float>.Build.DenseOfArray(new float[] { transform.position.x, transform.position.y, transform.position.z });
-        Vector<float> world_pos_of_cube = Vector<float>.Build.DenseOfArray(new float[] { world_position_of_cube.x, world_position_of_cube.y, world_position_of_cube.z });
+        Vector<float> world_pos_of_node = Vector<float>.Build.DenseOfArray(new float[] 
+        { 
+            transform.position.x, 
+            transform.position.y, 
+            transform.position.z 
+        });
+
+        Vector<float> world_pos_of_cube = Vector<float>.Build.DenseOfArray(new float[] 
+        { 
+            world_position_of_simulated_object.x, 
+            world_position_of_simulated_object.y, 
+            world_position_of_simulated_object.z 
+        });
+
         TetrahedronBuilder tet_builder = GameObject.Find("FEM_Mesh").GetComponent<TetrahedronBuilder>();
         RelationManager relation_manager = GameObject.Find("FEM_Mesh").GetComponent<RelationManager>();
 
@@ -76,30 +88,19 @@ public class Node : MonoBehaviour
             Debug.Assert(intersection_points.Count != 1, "Wrong Intersection data.");
         }
 
-        GameObject kZeroPlus_go = null;
-        GameObject kZeroMinus_go = null;
+        GameObject kZeroPlus_go = Instantiate(node_prefab.gameObject, transform.parent);
+        kZeroPlus_go.transform.position = transform.position;
+        kZeroPlus_go.transform.localPosition = transform.localPosition;
 
-        Node kZeroPlus = null;
-        Node kZeroMinus = null;
-        
-        // it is possible for a crack to not hit any tetrahedron, so we have to account for that.
-        if(not_intersected_tets.Count > 0 || two_point_intersected_tets.Count > 0 || three_point_intersected_tets.Count > 0)
-        {
-            kZeroPlus_go = Instantiate(node_prefab.gameObject, transform.parent);
-            kZeroPlus_go.transform.position = transform.position;
-            kZeroPlus_go.transform.localPosition = transform.localPosition;
+        GameObject kZeroMinus_go = Instantiate(node_prefab.gameObject, transform.parent);
+        kZeroMinus_go.transform.position = transform.position;
+        kZeroMinus_go.transform.localPosition = transform.localPosition;
 
-            kZeroMinus_go = Instantiate(node_prefab.gameObject, transform.parent);
-            kZeroMinus_go.transform.position = transform.position;
-            kZeroMinus_go.transform.localPosition = transform.localPosition;
+        Node kZeroPlus = kZeroPlus_go.GetComponent<Node>();
+        Node kZeroMinus = kZeroMinus_go.GetComponent<Node>();
 
-            kZeroPlus = kZeroPlus_go.GetComponent<Node>();
-            kZeroMinus = kZeroMinus_go.GetComponent<Node>();
-        }
-        else
-        {
-            return new Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>>(old_tetrahedra, new_tetrahedra, new_nodes);
-        }
+        new_nodes.Add(kZeroPlus);
+        new_nodes.Add(kZeroMinus);
 
         // some debug information
         // ======================================================================================================================================
@@ -136,6 +137,25 @@ public class Node : MonoBehaviour
                 not_hit_t.SwapNodes(this, kZeroMinus);
             }
             relation_manager.UpdateRelations();
+
+            // if we have tets that are affected by a crack but they are not remeshed, they need to recalculate their beta.
+            not_hit_t.Beta();
+        }
+
+        // it is possible for a crack to not hit any tetrahedron, so we have to account for that.
+        if (not_intersected_tets.Count > 0 && two_point_intersected_tets.Count == 0 && three_point_intersected_tets.Count == 0)
+        {
+            if(kZeroMinus.attached_elements.Count == 0)
+            {
+                DestroyImmediate(kZeroMinus_go);
+                new_nodes.Remove(kZeroMinus);
+            }
+            if (kZeroPlus.attached_elements.Count == 0)
+            {
+                DestroyImmediate(kZeroPlus_go);
+                new_nodes.Remove(kZeroPlus);
+            }
+            return new Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>>(old_tetrahedra, new_tetrahedra, new_nodes);
         }
 
         // for each three point intersected tetrahedron:
@@ -175,7 +195,11 @@ public class Node : MonoBehaviour
                         // check if these three nodes are the nodes we are looking for
                         for (int i = 0; i < 3; i++)
                         {
-                            if (!neighbor.Value.Contains(face_nodes[i])) break;
+                            if (!neighbor.Value.Contains(face_nodes[i]))
+                            {
+                                matching_neighbor = null;
+                                break;
+                            }
                             matching_neighbor = neighbor.Key;
                         }
                     }
@@ -237,9 +261,11 @@ public class Node : MonoBehaviour
                         }
                     }
                 }
-                //Debug.Assert(node_on_intersection_edge != null, "didn't find the other node on the intersection line.");
+                Debug.Assert(other_node_found, "the node on the intersection edge couldn't be found.");
 
-                // TODO ...
+                // TODO create new tetrahedra
+                // TODO update neighbors edge separation remeshing
+                // TODO update relations
             }
             relation_manager.UpdateRelations();
         }
@@ -313,11 +339,19 @@ public class Node : MonoBehaviour
             GameObject kFour_go = Instantiate(node_prefab.gameObject, transform.parent);
             kFour_go.transform.localPosition = new Vector3(kFourMatPos.At(0), kFourMatPos.At(1), kFourMatPos.At(2));
             kFour_go.transform.position = new Vector3(kFourWorldPos.At(0), kFourWorldPos.At(1), kFourWorldPos.At(2));
+
             GameObject kFive_go = Instantiate(node_prefab.gameObject, transform.parent);
             kFive_go.transform.localPosition = new Vector3(kFiveMatPos.At(0), kFiveMatPos.At(1), kFiveMatPos.At(2));
             kFive_go.transform.position = new Vector3(kFiveWorldPos.At(0), kFiveWorldPos.At(1), kFiveWorldPos.At(2));
-            new_nodes.Add(kFour_go.GetComponent<Node>());
-            new_nodes.Add(kFive_go.GetComponent<Node>());
+
+            Node kFour = kFour_go.GetComponent<Node>();
+            kFour.old_world_position = new Vector3(kFourWorldPos.At(0), kFourWorldPos.At(1), kFourWorldPos.At(2));
+
+            Node kFive = kFive_go.GetComponent<Node>();
+            kFive.old_world_position = new Vector3(kFiveWorldPos.At(0), kFiveWorldPos.At(1), kFiveWorldPos.At(2));
+
+            new_nodes.Add(kFour);
+            new_nodes.Add(kFive);
 
             // find one of the edges that cut the only quadriliteral face of the resulting polygon.
             // say 
@@ -334,15 +368,15 @@ public class Node : MonoBehaviour
             // it will result in two vectors that both point in exactly opposite directions.
             // for b - w both projections will point in the same direction.
 
-            Vector<float> w_to_a = MathUtility.ToVector(kTwo.transform.position) - MathUtility.ToVector(kFour_go.GetComponent<Node>().transform.position);
-            Vector<float> w_to_b = MathUtility.ToVector(kTwo.transform.position) - MathUtility.ToVector(kFive_go.GetComponent<Node>().transform.position);
-            Vector<float> w_to_y = MathUtility.ToVector(kTwo.transform.position) - MathUtility.ToVector(kThree.transform.position);
+            Vector<float> w_to_a = MathUtility.ToVector(kFour_go.GetComponent<Node>().transform.position) - MathUtility.ToVector(kTwo.transform.position);
+            Vector<float> w_to_b = MathUtility.ToVector(kFive_go.GetComponent<Node>().transform.position) - MathUtility.ToVector(kTwo.transform.position);
+            Vector<float> w_to_y = MathUtility.ToVector(kThree.transform.position) - MathUtility.ToVector(kTwo.transform.position);
 
             // project w_to_b onto w_to_a
-            Vector<float> tbc_1 = w_to_b - ((w_to_b.DotProduct(w_to_a) / (float)w_to_a.L2Norm()) * w_to_a);
+            Vector<float> tbc_1 = MathUtility.ProjectOnto(w_to_b, w_to_a) - w_to_b;
 
             // project w_to_y onto w_to_a
-            Vector<float> tbc_2 = w_to_y - ((w_to_y.DotProduct(w_to_a) / (float)w_to_a.L2Norm()) * w_to_a);
+            Vector<float> tbc_2 = MathUtility.ProjectOnto(w_to_y, w_to_a) - w_to_y;
 
             Tetrahedron t1;
             Tetrahedron t2;
@@ -406,6 +440,7 @@ public class Node : MonoBehaviour
                     old_tetrahedra.Add(neighbor.Key);
                 }
 
+                // if the neighbor has exactly one matching edge that is intersected
                 if (first_connected_edge_intersected ^ second_connected_edge_intersected)
                 {
                     Node w = null, x = null, y = null, z = null; // x & y are the nodes attached to the intersected edges, w & z are the other ones.
@@ -430,7 +465,10 @@ public class Node : MonoBehaviour
                     {
                         if (!n.Equals(x) && !n.Equals(y))
                         {
-                            w = n;
+                            if(!first_found)
+                            {
+                                w = n;
+                            }
 
                             if (first_found)
                             {
@@ -480,8 +518,8 @@ public class Node : MonoBehaviour
                         y = second_intersected_edge_n1;
                     }
 
-                    a = MathUtility.WhichNodeIsOnLine(x, w, kFour_go.GetComponent<Node>(), kFive_go.GetComponent<Node>());
-                    b = MathUtility.WhichNodeIsOnLine(x, y, kFour_go.GetComponent<Node>(), kFive_go.GetComponent<Node>());
+                    a = MathUtility.WhichNodeIsOnLine(x, y, kFour_go.GetComponent<Node>(), kFive_go.GetComponent<Node>());
+                    b = MathUtility.WhichNodeIsOnLine(x, w, kFour_go.GetComponent<Node>(), kFive_go.GetComponent<Node>());
 
                     foreach (Node n in neighbor.Key.nodes)
                     {
@@ -491,26 +529,11 @@ public class Node : MonoBehaviour
                         }
                     }
 
+                    Debug.Assert(z != null, "the independent node was not found.");
+
                     Tetrahedron n_t1 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, b.gameObject, x.gameObject, z.gameObject }).GetComponent<Tetrahedron>();
-
-                    Vector<float> n_w_to_a = MathUtility.ToVector(a.transform.position) - MathUtility.ToVector(w.transform.position);
-                    Vector<float> n_w_to_b = MathUtility.ToVector(b.transform.position) - MathUtility.ToVector(w.transform.position);
-                    Vector<float> n_w_to_y = MathUtility.ToVector(y.transform.position) - MathUtility.ToVector(w.transform.position);
-
-                    Vector<float> n_tbc_1 = n_w_to_b - ((n_w_to_b.DotProduct(n_w_to_a) / (float)n_w_to_a.L2Norm()) * n_w_to_a);
-                    Vector<float> n_tbc_2 = n_w_to_y - ((n_w_to_y.DotProduct(n_w_to_a) / (float)n_w_to_a.L2Norm()) * n_w_to_a);
-
                     Tetrahedron n_t2 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, b.gameObject, w.gameObject, z.gameObject }).GetComponent<Tetrahedron>();
-                    Tetrahedron n_t3;
-
-                    if (n_tbc_1.DotProduct(n_tbc_2) < 0.0f)
-                    {
-                        n_t3 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, w.gameObject, y.gameObject, z.gameObject }).GetComponent<Tetrahedron>();
-                    }
-                    else
-                    {
-                        n_t3 = tet_builder.GenerateTetrahedron(new GameObject[] { b.gameObject, w.gameObject, y.gameObject, z.gameObject }).GetComponent<Tetrahedron>();
-                    }
+                    Tetrahedron n_t3 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, w.gameObject, y.gameObject, z.gameObject }).GetComponent<Tetrahedron>();
 
                     new_tetrahedra.Add(n_t1);
                     new_tetrahedra.Add(n_t2);
@@ -519,7 +542,6 @@ public class Node : MonoBehaviour
             }
             relation_manager.UpdateRelations();
         }
-
         relation_manager.UpdateRelations();
         return new Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>>(old_tetrahedra, new_tetrahedra, new_nodes);
     }
@@ -588,28 +610,26 @@ public class Node : MonoBehaviour
             Vector<float> rhs_transformed_eigenvec_2 = max * evd.EigenVectors.Column(1);
             Vector<float> rhs_transformed_eigenvec_3 = max * evd.EigenVectors.Column(2);
 
-            if (MathUtility.EqualsRoughly(lhs_transformed_eigenvec_1, rhs_transformed_eigenvec_1, maximum_difference: 0.1f))
+            if (MathUtility.EqualsRoughly(lhs_transformed_eigenvec_1, rhs_transformed_eigenvec_1, maximum_difference: 0.5f))
             {
                 fracture_plane_normal = evd.EigenVectors.Column(0) / (float)evd.EigenVectors.Column(0).L2Norm();
                 debug_worked = true;
             }
 
-            else if (MathUtility.EqualsRoughly(lhs_transformed_eigenvec_2, rhs_transformed_eigenvec_2, maximum_difference: 0.1f))
+            else if (MathUtility.EqualsRoughly(lhs_transformed_eigenvec_2, rhs_transformed_eigenvec_2, maximum_difference: 0.5f))
             {
                 fracture_plane_normal = evd.EigenVectors.Column(1) / (float)evd.EigenVectors.Column(1).L2Norm();
                 debug_worked = true;
             }
 
-            else if (MathUtility.EqualsRoughly(lhs_transformed_eigenvec_3, rhs_transformed_eigenvec_3, maximum_difference: 0.1f))
+            else if (MathUtility.EqualsRoughly(lhs_transformed_eigenvec_3, rhs_transformed_eigenvec_3, maximum_difference: 0.5f))
             {
                 fracture_plane_normal = evd.EigenVectors.Column(2) / (float)evd.EigenVectors.Column(2).L2Norm();
                 debug_worked = true;
             }
+
             Debug.Assert(debug_worked);
-            if(!debug_worked)
-            {
-                Debug.Log("Eigenvalues were: " + evd);
-            }
+
             return true;
         }
 
