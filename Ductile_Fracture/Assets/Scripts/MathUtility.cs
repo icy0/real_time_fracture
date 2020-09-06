@@ -33,7 +33,9 @@ public class MathUtility
 
         for (int member = 0; member < 3; member++)
         {
-            if (x.At(member) - (y.At(member)) > maximum_difference)
+            
+            //if (x.At(member) - y.At(member) > maximum_difference)
+            if (Math.Abs(x.At(member) - y.At(member)) > maximum_difference)
             {
                 return false;
             }
@@ -41,30 +43,36 @@ public class MathUtility
         return true;
     }
 
-    public static Tuple<bool, bool, Vector<float>> LinePlaneIntersection(Vector<float> n, Vector<float> normal, Vector<float> a, Vector<float> b)
+    public static Tuple<bool /*intersection?*/, bool /*line segment within plane?*/, Vector<float>> LinePlaneIntersection(Vector<float> point_on_plane, Vector<float> plane_normal, Vector<float> a, Vector<float> b)
     {
-        Debug.Assert(n != null);
-        Debug.Assert(normal != null);
+        Debug.Assert(point_on_plane != null);
+        Debug.Assert(plane_normal != null);
         Debug.Assert(a != null);
         Debug.Assert(b != null);
 
-        Vector<float> w = a - n;
+        // if the line segment is parallel to the plane, it either lies within the plane or there is no point of intersection
+        if ((a - b).DotProduct(plane_normal) == 0.0f)
+        {
+            // if the line segment lies within the plane, point a lies on the plane
+            if ((point_on_plane - a).DotProduct(plane_normal) == 0.0f)
+            {
+                return new Tuple<bool, bool, Vector<float>>(true, true, null);
+            }
+            // else there is no point of intersection
+            return new Tuple<bool, bool, Vector<float>>(false, false, null);
+        }
+
+        Vector<float> w = a - point_on_plane;
         Vector<float> u = b - a;
         float length_of_edge = (float)u.L2Norm();
-        float scalar = (-normal).DotProduct(w) / normal.DotProduct(u);
+        float scalar = (-plane_normal).DotProduct(w) / plane_normal.DotProduct(u);
 
-        if (scalar > 0.0f && scalar <= 1.0f)
+        if (scalar >= 0.0f && scalar <= 1.0f)
         {
             return new Tuple<bool, bool, Vector<float>>(true, false, a + (u * scalar));
         }
-        else if (scalar == 0.0f)
-        {
-            return new Tuple<bool, bool, Vector<float>>(true, true, a + (u * scalar));
-        }
-        else
-        {
-            return new Tuple<bool, bool, Vector<float>>(false, false, null);
-        }
+        // no point of intersection
+        return new Tuple<bool, bool, Vector<float>>(false, false, null);
     }
 
     public static bool IsOnPositiveSide(Node n, Vector<float> point_on_plane, Vector<float> plane_normal)

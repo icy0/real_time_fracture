@@ -38,11 +38,15 @@ public class Tetrahedron : MonoBehaviour
         beta = beta.Inverse();
     }
 
-    public Tuple<bool, List<Tuple<Node, Node, Vector<float>>>> Intersect(Node n, Vector<float> normal_of_plane)
+    public Tuple<bool /*is there an edge of the tet that is parallel to the fracture plane and is the fp NOT parallel to a face*/, 
+        bool /*is the fracture plane coplanar with a face?*/, 
+        List<Tuple<Node, Node, Vector<float>>>> 
+        Intersect(Node n, Vector<float> normal_of_plane)
     {
         List<Tuple<Node, Node, Vector<float>>> intersection_points = new List<Tuple<Node, Node, Vector<float>>>();
         Vector<float> world_pos_of_n = Vector<float>.Build.DenseOfArray(new float[] { n.transform.position.x, n.transform.position.y, n.transform.position.z });
         bool coplanar_with_face = false;
+        bool parallel_to_edge_but_not_coplanar = false;
 
         // only do intersection for edges between nodes that are not n
         Node x, y, z;
@@ -60,22 +64,32 @@ public class Tetrahedron : MonoBehaviour
         Tuple<bool, bool, Vector<float>> intersection_xz = MathUtility.LinePlaneIntersection(world_pos_of_n, normal_of_plane, world_pos_of_x, world_pos_of_z);
         Tuple<bool, bool, Vector<float>> intersection_yz = MathUtility.LinePlaneIntersection(world_pos_of_n, normal_of_plane, world_pos_of_y, world_pos_of_z);
 
+        // TODO if the intersection point is too close to a node, just set it to be on the node and update the booleans. this way we avoid marginally small tetrahedra.
+
         if (intersection_xy.Item1) intersection_points.Add(new Tuple<Node, Node, Vector<float>>(x, y, intersection_xy.Item3));
         if (intersection_xz.Item1) intersection_points.Add(new Tuple<Node, Node, Vector<float>>(x, z, intersection_xz.Item3));
         if (intersection_yz.Item1) intersection_points.Add(new Tuple<Node, Node, Vector<float>>(y, z, intersection_yz.Item3));
 
-        int node_on_plane_count = 0;
-        if (intersection_xy.Item2) node_on_plane_count++;
-        if (intersection_xz.Item2) node_on_plane_count++;
-        if (intersection_yz.Item2) node_on_plane_count++;
+        // if any of the edges between x, y and z is parallel to the fracture plane, then the fp is coplanar to a face
+        if (intersection_xy.Item2) coplanar_with_face = true;
+        if (intersection_xz.Item2) coplanar_with_face = true;
+        if (intersection_yz.Item2) coplanar_with_face = true;
 
-        if (node_on_plane_count == 2)
+        // it could still be that one edge coming from n is parallel to the fracture plane
+        if (!coplanar_with_face)
         {
-            coplanar_with_face = true;
-        }
-        Debug.Assert(node_on_plane_count <= 2, "The plane apparently has 4 nodes on it, check MathUtility.LinePlaneIntersection.");
+            // see if intersection is exactly at x, y, or z
+            bool is_inters_at_x = intersection_xy.Item1 && intersection_xz.Item1 && (MathUtility.EqualsRoughly(world_pos_of_x, intersection_xy.Item3, 0.0f) || MathUtility.EqualsRoughly(world_pos_of_x, intersection_xz.Item3, 0.0f));
+            bool is_inters_at_y = intersection_xy.Item1 && intersection_yz.Item1 && (MathUtility.EqualsRoughly(world_pos_of_y, intersection_xy.Item3, 0.0f) || MathUtility.EqualsRoughly(world_pos_of_y, intersection_yz.Item3, 0.0f));
+            bool is_inters_at_z = intersection_xz.Item1 && intersection_yz.Item1 && (MathUtility.EqualsRoughly(world_pos_of_z, intersection_xz.Item3, 0.0f) || MathUtility.EqualsRoughly(world_pos_of_z, intersection_yz.Item3, 0.0f));
 
-        return new Tuple<bool, List<Tuple<Node, Node, Vector<float>>>>(coplanar_with_face, intersection_points);
+            if (is_inters_at_x || is_inters_at_y || is_inters_at_z)
+            {
+                parallel_to_edge_but_not_coplanar = true;
+            }
+        }
+
+        return new Tuple<bool, bool, List<Tuple<Node, Node, Vector<float>>>>(parallel_to_edge_but_not_coplanar, coplanar_with_face, intersection_points);
     }
 
     public void SwapNodes(Node tbs, Node new_node)

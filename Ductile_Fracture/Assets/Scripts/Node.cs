@@ -49,9 +49,8 @@ public class Node : MonoBehaviour
         // for each intersected tetrahedron, this dictionary holds a list of Tuples, where one Tuple describes the edge (item1 - item2) and the world_pos (item3) of the intersection
         Dictionary<Tetrahedron, List<Tuple<Node, Node, Vector<float>>>> two_point_intersected_tets = new Dictionary<Tetrahedron, List<Tuple<Node, Node, Vector<float>>>>();
 
-        // for each three-way-intersected tetrahedron, this dictionary holds a list of tuples, where one Tuple describes the edge (item1 - item2) and the world_pos (item3) of the intersection and it holds
-        // a bool which indicates, whether the fracture plane of the intersection is coplanar with a face of the tetrahedron or not.
-        Dictionary<Tetrahedron, Tuple<bool, List<Tuple<Node, Node, Vector<float>>>>> three_point_intersected_tets = new Dictionary<Tetrahedron, Tuple<bool, List<Tuple<Node, Node, Vector<float>>>>>();
+        Dictionary<Tetrahedron, List<Node>> coplanar_intersected_tets = new Dictionary<Tetrahedron, List<Node>>();
+        Dictionary<Tetrahedron, List<Tuple<Node, Node, Vector<float>>>> parallel_edge_but_not_coplanar_intersected_tets = new Dictionary<Tetrahedron, List<Tuple<Node, Node, Vector<float>>>>();
 
         // and there is a list for each non-intersected tetrahedron.
         List<Tetrahedron> not_intersected_tets = new List<Tetrahedron>();
@@ -76,16 +75,40 @@ public class Node : MonoBehaviour
             //      - the fracture plane none of the above and cuts right through the tetrahedron (complex)
 
             // we can distinguish these cases by testing which edge of the tetrahedron intersects with the fracture plane.
-            Tuple<bool /*is coplanar to face*/, List<Tuple<Node, Node, Vector<float>>>> intersection_data = t.Intersect(this, fracture_plane_normal);
-            List<Tuple<Node, Node, Vector<float>>> intersection_points = intersection_data.Item2;
 
-            switch (intersection_points.Count)
+            Tuple<bool /*is there an edge of the tet that is parallel to the fracture plane but the fracture plane is NOT coplanar with a face of the tet*/, 
+                bool /*is the fracture plane coplanar with a face*/, 
+                List<Tuple<Node, Node, Vector<float>>>> intersection_data = t.Intersect(this, fracture_plane_normal);
+            List<Tuple<Node, Node, Vector<float>>> intersection_points = intersection_data.Item3;
+
+            if(intersection_data.Item1)
             {
-                case 3: three_point_intersected_tets.Add(t, new Tuple<bool, List<Tuple<Node, Node, Vector<float>>>>(intersection_data.Item1 /*is coplanar to face*/, intersection_points)); break;
-                case 2: two_point_intersected_tets.Add(t, intersection_points); break;
-                case 0: not_intersected_tets.Add(t); break;
+                parallel_edge_but_not_coplanar_intersected_tets.Add(t, intersection_points);
             }
-            Debug.Assert(intersection_points.Count != 1, "Wrong Intersection data.");
+            if(intersection_data.Item2)
+            {
+                foreach(Tuple<Node, Node, Vector<float>> intersection_point in intersection_points)
+                {
+                    if(intersection_point.Item3 == null)
+                    {
+                        List<Node> temp = new List<Node>();
+                        temp.Add(this);
+                        temp.Add(intersection_point.Item1);
+                        temp.Add(intersection_point.Item2);
+                        coplanar_intersected_tets.Add(t, temp);
+                        break;
+                    }
+                }
+            }
+
+            if(!intersection_data.Item1 && !intersection_data.Item2 && intersection_data.Item3.Count != 0)
+            {
+                two_point_intersected_tets.Add(t, intersection_points);
+            }
+            else if(!intersection_data.Item1 && !intersection_data.Item2 && intersection_data.Item3.Count == 0)
+            {
+                not_intersected_tets.Add(t);
+            }
         }
 
         GameObject kZeroPlus_go = Instantiate(node_prefab.gameObject, transform.parent);
@@ -104,20 +127,10 @@ public class Node : MonoBehaviour
 
         // some debug information
         // ======================================================================================================================================
-        Debug.Log("Crack-Info: There are " + two_point_intersected_tets.Count +
-            " cases of two-point-intersections, " + three_point_intersected_tets.Count +
-            " cases of three-point-intersections and " + not_intersected_tets.Count + " cases of non-intersected tetrahedra.");
-
-        if (three_point_intersected_tets.Count > 0)
-        {
-            int count = 0;
-            foreach (KeyValuePair<Tetrahedron, Tuple<bool, List<Tuple<Node, Node, Vector<float>>>>> kvp in three_point_intersected_tets)
-            {
-                if (kvp.Value.Item1) count++;
-            }
-            Debug.Log("Out of the " + three_point_intersected_tets.Count +
-                " three-point-intersections, there are " + count + " which are coplanar to a face of the tetrahedron.");
-        }
+        Debug.Log("Crack-Info: There are " + two_point_intersected_tets.Count + " cases of two_point-intersections, " 
+            + coplanar_intersected_tets.Count + " cases of coplanar-intersections, " 
+            + parallel_edge_but_not_coplanar_intersected_tets.Count + " cases of parallel_edge_but_not_coplanar-intersections and "
+            + not_intersected_tets.Count + " cases of non-intersected tetrahedra.");
         // ======================================================================================================================================
 
         // for each non-hit tetrahedron:
@@ -143,7 +156,7 @@ public class Node : MonoBehaviour
         }
 
         // it is possible for a crack to not hit any tetrahedron, so we have to account for that.
-        if (not_intersected_tets.Count > 0 && two_point_intersected_tets.Count == 0 && three_point_intersected_tets.Count == 0)
+        if (not_intersected_tets.Count > 0 && two_point_intersected_tets.Count == 0 && coplanar_intersected_tets.Count == 0 && parallel_edge_but_not_coplanar_intersected_tets.Count == 0)
         {
             if(kZeroMinus.attached_elements.Count == 0)
             {
@@ -158,123 +171,213 @@ public class Node : MonoBehaviour
             return new Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>>(old_tetrahedra, new_tetrahedra, new_nodes);
         }
 
-        // for each three point intersected tetrahedron:
-        foreach (KeyValuePair<Tetrahedron, Tuple<bool /*is coplanar to face*/, List<Tuple<Node, Node, Vector<float>>>>> intersected_tet in three_point_intersected_tets)
+        // for each coplanar intersection:
+        foreach (KeyValuePair<Tetrahedron, List<Node>> coplanar_tet in coplanar_intersected_tets)
         {
-            if (intersected_tet.Value.Item1 /*is coplanar to face*/)
+            // this is a unique setting: if we have a neighbor at the face which is coplanar, this neighbor is also in the list of the coplanar_intersected_tets.
+            // so we have to account for that by removing the neighbor from the list.
+            if(!coplanar_tet.Key.node_transforms.Contains(this.transform))
             {
-                // first collect the nodes which are on the fracture plane
-                List<Node> face_nodes = new List<Node>();
-                face_nodes.Add(this);
+                continue;
+            }
 
-                // for each edge that was intersected by the fracture plane
-                for (int i = 0; i < 3; i++)
+            // first collect the nodes which are on the fracture plane
+            List<Node> face_nodes = coplanar_tet.Value;
+
+            // try to find a neighbor which has all three of the face_nodes as its own nodes.
+            Dictionary<Tetrahedron, List<Node>> neighbors = coplanar_tet.Key.neighbors;
+            Tetrahedron matching_neighbor = null;
+
+            List<Vector<float>> this_node_positions = new List<Vector<float>>();
+            this_node_positions.Add(Vector<float>.Build.DenseOfArray(new float[] { coplanar_tet.Key.nodes[0].transform.position.x, coplanar_tet.Key.nodes[0].transform.position.y, coplanar_tet.Key.nodes[0].transform.position.z }));
+            this_node_positions.Add(Vector<float>.Build.DenseOfArray(new float[] { coplanar_tet.Key.nodes[1].transform.position.x, coplanar_tet.Key.nodes[1].transform.position.y, coplanar_tet.Key.nodes[1].transform.position.z }));
+            this_node_positions.Add(Vector<float>.Build.DenseOfArray(new float[] { coplanar_tet.Key.nodes[2].transform.position.x, coplanar_tet.Key.nodes[2].transform.position.y, coplanar_tet.Key.nodes[2].transform.position.z }));
+            this_node_positions.Add(Vector<float>.Build.DenseOfArray(new float[] { coplanar_tet.Key.nodes[3].transform.position.x, coplanar_tet.Key.nodes[3].transform.position.y, coplanar_tet.Key.nodes[3].transform.position.z }));
+
+            foreach (KeyValuePair<Tetrahedron, List<Node>> neighbor in neighbors)
+            {
+                List<Vector<float>> neighbor_node_positions = new List<Vector<float>>();
+                neighbor_node_positions.Add(Vector<float>.Build.DenseOfArray(new float[] { neighbor.Key.nodes[0].transform.position.x, neighbor.Key.nodes[0].transform.position.y, neighbor.Key.nodes[0].transform.position.z }));
+                neighbor_node_positions.Add(Vector<float>.Build.DenseOfArray(new float[] { neighbor.Key.nodes[1].transform.position.x, neighbor.Key.nodes[1].transform.position.y, neighbor.Key.nodes[1].transform.position.z }));
+                neighbor_node_positions.Add(Vector<float>.Build.DenseOfArray(new float[] { neighbor.Key.nodes[2].transform.position.x, neighbor.Key.nodes[2].transform.position.y, neighbor.Key.nodes[2].transform.position.z }));
+                neighbor_node_positions.Add(Vector<float>.Build.DenseOfArray(new float[] { neighbor.Key.nodes[3].transform.position.x, neighbor.Key.nodes[3].transform.position.y, neighbor.Key.nodes[3].transform.position.z }));
+
+                List<Vector<float>> connections = new List<Vector<float>>();
+                for(int i = 0; i < 4; i++)
                 {
-                    Tuple<Node, Node, Vector<float>> intersected_edge = intersected_tet.Value.Item2[i];
-                    Vector<float> inters_edge_node_1 = Vector<float>.Build.DenseOfArray(new float[] { intersected_edge.Item1.transform.position.x, intersected_edge.Item1.transform.position.y, intersected_edge.Item1.transform.position.z });
-                    Vector<float> inters_edge_node_2 = Vector<float>.Build.DenseOfArray(new float[] { intersected_edge.Item2.transform.position.x, intersected_edge.Item2.transform.position.y, intersected_edge.Item2.transform.position.z });
-                    float distance_1 = (float)(inters_edge_node_1 - intersected_edge.Item3).L2Norm(); // distance between intersection point and inters_edge_node_1
-                    float distance_2 = (float)(inters_edge_node_2 - intersected_edge.Item3).L2Norm(); // distance between intersection point and inters_edge_node_2
-
-                    Node on_face = distance_1 < distance_2 ? intersected_edge.Item1 : intersected_edge.Item2; // whichever is closer to the intersection point is the actual node
-                    if (!face_nodes.Contains(on_face)) face_nodes.Add(on_face);
-                }
-
-                Debug.Assert(face_nodes.Count == 3, "Three-Point-Intersection Evaluation failed.");
-
-                // try to find a neighbor which has all three of the face_nodes as its own nodes.
-                Dictionary<Tetrahedron, List<Node>> neighbors = intersected_tet.Key.neighbors;
-                Tetrahedron matching_neighbor = null;
-
-                // for each neighbor
-                foreach (KeyValuePair<Tetrahedron, List<Node>> neighbor in neighbors)
-                {
-                    // if this tetrahedron even shares 3 nodes with the neighbor
-                    if (neighbor.Value.Count == 3)
+                    for (int j = 0; j < 4; j++)
                     {
-                        // check if these three nodes are the nodes we are looking for
-                        for (int i = 0; i < 3; i++)
+                        if(MathUtility.EqualsRoughly(this_node_positions[i], neighbor_node_positions[j], 0.0f))
                         {
-                            if (!neighbor.Value.Contains(face_nodes[i]))
-                            {
-                                matching_neighbor = null;
-                                break;
-                            }
-                            matching_neighbor = neighbor.Key;
+                            connections.Add(this_node_positions[i]);
                         }
                     }
-                    if (matching_neighbor != null) break;
                 }
 
-                // if we found a neighbor that is attached to the coplanar face
-                if (matching_neighbor != null)
+                if(connections.Count == 3)
                 {
-                    // now we have to find out, which tetrahedron is in which halfspace of the fracture plane
-                    Node[] nodes_of_t = intersected_tet.Key.nodes;
+                    matching_neighbor = neighbor.Key;
+                }
+            }
 
-                    // for that we just find the one node which isn't on the fracture plane and check if it is in the positive or negative halfspace
-                    Node not_on_face_t1 = null;
-                    for (int i = 0; i < 4; i++)
+            // if we found a neighbor that is attached to the coplanar face
+            if (matching_neighbor != null)
+            {
+                // now we have to find out, which tetrahedron is in which halfspace of the fracture plane
+                Node[] nodes_of_t = coplanar_tet.Key.nodes;
+
+                // for that we just find the one node which isn't on the fracture plane and check if it is in the positive or negative halfspace
+                Node not_on_face_t1 = null;
+                for (int i = 0; i < 4; i++)
+                {
+                    if (!face_nodes.Contains(nodes_of_t[i])) not_on_face_t1 = nodes_of_t[i];
+                }
+                Debug.Assert(not_on_face_t1 != null, "Didn't find the Node which is not on the coplanar fracture face.");
+
+                nodes_of_t = matching_neighbor.nodes;
+                Node not_on_face_t2 = null;
+                for (int i = 0; i < 4; i++)
+                {
+                    if (!face_nodes.Contains(nodes_of_t[i])) not_on_face_t2 = nodes_of_t[i];
+                }
+                Debug.Assert(not_on_face_t2 != null, "Didn't find the Node which is not on the coplanar fracture face.");
+
+                // reassign kZeroMinus and kZeroPlus accordingly.
+                if (MathUtility.IsOnPositiveSide(not_on_face_t1, Vector<float>.Build.DenseOfArray(new float[] { transform.position.x, transform.position.y, transform.position.z }), fracture_plane_normal))
+                {
+                    coplanar_tet.Key.nodes[MathUtility.GetIndexOf(coplanar_tet.Key, not_on_face_t1)] = kZeroPlus;
+                    matching_neighbor.nodes[MathUtility.GetIndexOf(matching_neighbor, not_on_face_t2)] = kZeroMinus;
+
+                    int index = coplanar_tet.Key.node_transforms.IndexOf(not_on_face_t1.transform);
+                    coplanar_tet.Key.node_transforms.RemoveAt(index);
+                    coplanar_tet.Key.node_transforms.Insert(index, kZeroPlus.transform);
+
+                    index = matching_neighbor.node_transforms.IndexOf(not_on_face_t2.transform);
+                    matching_neighbor.node_transforms.RemoveAt(index);
+                    matching_neighbor.node_transforms.Insert(index, kZeroMinus.transform);
+                }
+                else
+                {
+                    coplanar_tet.Key.nodes[MathUtility.GetIndexOf(coplanar_tet.Key, this)] = kZeroMinus;
+                    matching_neighbor.nodes[MathUtility.GetIndexOf(matching_neighbor, this)] = kZeroPlus;
+
+                    int index = coplanar_tet.Key.node_transforms.IndexOf(this.transform);
+                    coplanar_tet.Key.node_transforms.RemoveAt(index);
+                    coplanar_tet.Key.node_transforms.Insert(index, kZeroMinus.transform);
+
+                    index = matching_neighbor.node_transforms.IndexOf(this.transform);
+                    matching_neighbor.node_transforms.RemoveAt(index);
+                    matching_neighbor.node_transforms.Insert(index, kZeroPlus.transform);
+                }
+            }
+            relation_manager.UpdateRelations();
+        }
+
+        foreach(KeyValuePair<Tetrahedron, List<Tuple<Node, Node, Vector<float>>>> intersected_tet in parallel_edge_but_not_coplanar_intersected_tets)
+        {
+            // we have to deal with 2 possible cases:
+            // first case is that the fracture plane only touches the tetrahedron at the exact edge which it is parallel to. 
+            // if this happens, we barely have to do anything.
+            // second case is that the fracture plane intersects with exactly one other edge. remeshing is required but still pretty simple.
+            // it is not an option that it is parallel to 2 edges, because then it would count as the fracture plane being coplanar to one face of the tetrahedron.
+
+            if(parallel_edge_but_not_coplanar_intersected_tets.Count == 2) // there is no other intersection
+            {
+                // we basically treat this case like a non-intersected tetrahedron
+                // determine in which halfspace of the fracture plane this tetrahedron is and reassign the cracked node (this)
+                // accordingly to kZeroPlus or kZeroMinus
+
+                // find node not on the parallel edge. there are two nodes of interest, both appear only once in the list of intersected edges
+                Node x = null;
+                for (int i = 0; i < 4; i++)
+                {
+                    int occurrences = 0;
+                    x = intersected_tet.Key.nodes[i];
+
+                    if (this.Equals(x)) continue;
+                    if (intersected_tet.Value[0].Item1.Equals(x))
                     {
-                        if (!face_nodes.Contains(nodes_of_t[i])) not_on_face_t1 = nodes_of_t[i];
+                        occurrences++;
                     }
-                    Debug.Assert(not_on_face_t1 != null, "Didn't find the Node which is not on the coplanar fracture face.");
-
-                    nodes_of_t = matching_neighbor.nodes;
-                    Node not_on_face_t2 = null;
-                    for (int i = 0; i < 4; i++)
+                    if(intersected_tet.Value[0].Item2.Equals(x))
                     {
-                        if (!face_nodes.Contains(nodes_of_t[i])) not_on_face_t2 = nodes_of_t[i];
+                        occurrences++;
                     }
-                    Debug.Assert(not_on_face_t2 != null, "Didn't find the Node which is not on the coplanar fracture face.");
-
-                    // reassign kZeroMinus and kZeroPlus accordingly.
-                    if (MathUtility.IsOnPositiveSide(not_on_face_t1, Vector<float>.Build.DenseOfArray(new float[] { transform.position.x, transform.position.y, transform.position.z }), fracture_plane_normal))
+                    if(intersected_tet.Value[1].Item1.Equals(x))
                     {
-                        intersected_tet.Key.nodes[MathUtility.GetIndexOf(intersected_tet.Key, not_on_face_t1)] = kZeroPlus;
-                        matching_neighbor.nodes[MathUtility.GetIndexOf(matching_neighbor, not_on_face_t2)] = kZeroMinus;
+                        occurrences++;
+                    }
+                    if(intersected_tet.Value[1].Item2.Equals(x))
+                    {
+                        occurrences++;
+                    }
+                    if (occurrences == 1)
+                    {
+                        break;
                     }
                     else
                     {
-                        intersected_tet.Key.nodes[MathUtility.GetIndexOf(intersected_tet.Key, not_on_face_t1)] = kZeroMinus;
-                        matching_neighbor.nodes[MathUtility.GetIndexOf(matching_neighbor, not_on_face_t2)] = kZeroPlus;
+                        x = null;
                     }
                 }
-            }
-            else // is not coplanar to face but cuts an edge
-            {
-                Debug.Assert(false, "This is not yet implemented, try to adapt the test case.");
-                // find the nodes on the edge that lies within the fracture plane
-                // find the nodes that are not on the edge
-                Node node_on_intersection_edge = null;
-                bool other_node_found = false;
-                foreach (Node n in intersected_tet.Key.nodes)
-                {
-                    if (n.Equals(this)) continue;
-                    foreach (Tuple<Node, Node, Vector<float>> intersec in intersected_tet.Value.Item2)
-                    {
-                        if (MathUtility.EqualsRoughly(MathUtility.ToVector(n.transform.position), intersec.Item3, 0.001f))
-                        {
-                            node_on_intersection_edge = n;
-                            other_node_found = true;
-                            break;
-                        }
-                    }
-                }
-                Debug.Assert(other_node_found, "the node on the intersection edge couldn't be found.");
 
-                // TODO create new tetrahedra
-                // TODO update neighbors edge separation remeshing
-                // TODO update relations
+                Debug.Assert(x != null);
+
+                if(MathUtility.IsOnPositiveSide(x, MathUtility.ToVector(this.transform.position), this.fracture_plane_normal))
+                {
+                    intersected_tet.Key.SwapNodes(this, kZeroPlus);
+                }
+                else
+                {
+                    intersected_tet.Key.SwapNodes(this, kZeroMinus);
+                }
+                relation_manager.UpdateRelations();
+
+                // if we have tets that are affected by a crack but they are not remeshed, they need to recalculate their beta.
+                intersected_tet.Key.Beta();
             }
-            relation_manager.UpdateRelations();
+            else if(parallel_edge_but_not_coplanar_intersected_tets.Count == 3) // there is one other intersection
+            {
+                Tuple<Node, Node, Vector<float>> intersection_of_interest = null;
+                // find the one intersection case that has a non-null Vector as the intersection point
+                foreach (Tuple<Node, Node, Vector<float>> intersection in intersected_tet.Value)
+                {
+                    if(intersection.Item3 != null)
+                    {
+                        intersection_of_interest = intersection;
+                    }
+                }
+                Debug.Assert(intersection_of_interest != null);
+
+                // separate the tetrahedron in two tetrahedra and remesh the potential neighbor at the intersected edge accordingly.
+
+
+                // is there a neighbor which shares the intersected edge?
+                Tetrahedron matching_neighbor = null;
+
+                foreach(KeyValuePair<Tetrahedron, List<Node>> neighbor in intersected_tet.Key.neighbors)
+                {
+                    if(neighbor.Value.Contains(intersection_of_interest.Item1) && neighbor.Value.Contains(intersection_of_interest.Item2))
+                    {
+                        matching_neighbor = neighbor.Key;
+                    }
+                }
+                // update the return-data-structures
+            }
         }
 
         // for each two point intersected tetrahedron:
         foreach (KeyValuePair<Tetrahedron, List<Tuple<Node, Node, Vector<float>>>> intersected_tet in two_point_intersected_tets)
         {
             // we know for sure that the current tetrahedron will not exist afterwards, so we mark it as "old".
-            old_tetrahedra.Add(intersected_tet.Key);
+            if(old_tetrahedra.Contains(intersected_tet.Key))
+            {
+                continue;
+            }
+            else
+            {
+                old_tetrahedra.Add(intersected_tet.Key);
+            }
 
             // find out which node is on which side of the fracture plane
             List<Tuple<Node, bool>> nodes_with_halfspace_flag = new List<Tuple<Node, bool>>(); // true == positive halfspace

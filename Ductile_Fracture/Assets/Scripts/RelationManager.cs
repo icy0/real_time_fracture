@@ -69,10 +69,7 @@ public class RelationManager : MonoBehaviour
                 for (int inner_attached_element_index = 0; inner_attached_element_index < node.attached_elements.Count; inner_attached_element_index++)
                 {
                     if (inner_attached_element_index == outer_attached_element_index) continue;
-                    if (!attached_elements[outer_attached_element_index].neighbors.ContainsKey(attached_elements[inner_attached_element_index]))
-                    {
-                        attached_elements[outer_attached_element_index].AddNeighbor(attached_elements[inner_attached_element_index], node);
-                    }
+                    attached_elements[outer_attached_element_index].AddNeighbor(attached_elements[inner_attached_element_index], node);
                 }
             }
         }
