@@ -17,8 +17,10 @@ public class FractureSimulator : MonoBehaviour
         public float phi;
         public float density;
         public float toughness;
+        public float elastic_limit;
+        public float plastic_limit;
 
-        public Material(float dilation, float rigidity, float psi, float phi, float density, float toughness)
+        public Material(float dilation, float rigidity, float psi, float phi, float density, float toughness, float elastic_limit, float plastic_limit)
         {
             this.dilation = dilation;
             this.rigidity = rigidity;
@@ -26,13 +28,15 @@ public class FractureSimulator : MonoBehaviour
             this.phi = phi;
             this.density = density;
             this.toughness = toughness;
+            this.elastic_limit = elastic_limit;
+            this.plastic_limit = plastic_limit;
         }
     }
 
     List<Tetrahedron> alltetrahedra = new List<Tetrahedron>();
     List<Node> allnodes = new List<Node>();
 
-    static Material glass = new Material(1.04e8f, 1.04e8f, 0.0f, 6760.0f, 2588.0f, 10140.0f);
+    static Material glass = new Material(1.04e8f, 1.04e8f, 0.0f, 6760.0f, 2588.0f, 10140.0f, 0.0f, 0.0f);
     static Material current = glass;
 
     void Start()
@@ -118,22 +122,39 @@ public class FractureSimulator : MonoBehaviour
                 foreach (Tetrahedron t in updated_tets_and_nodes.Item1)
                 {
                     alltetrahedra.Remove(t);
-                    DestroyImmediate(t.gameObject);
+                    t.nodes = null;
+                    t.node_transforms.Clear();
+                    Destroy(t.gameObject);
                 }
                 alltetrahedra.AddRange(updated_tets_and_nodes.Item2);
                 allnodes.AddRange(updated_tets_and_nodes.Item3);
-                relation_manager.UpdateRelations();
                 Debug.Log("Crack occurs");
+
+                relation_manager.UpdateRelations();
+
+                foreach (Tetrahedron t in alltetrahedra)
+                {
+                    t.Beta();
+                }
             }
             n.ClearTensileAndCompressiveForces();
         }
 
-        foreach (Node n in nodes_to_be_removed)
+        GameObject[] nodes = GameObject.FindGameObjectsWithTag("FEM_Node");
+        foreach (GameObject n_go in nodes)
         {
-            allnodes.Remove(n);
-            DestroyImmediate(n.gameObject);
-            // TODO does the following introduce any changes? because it shouldn't.
-            relation_manager.UpdateRelations();
+            Node n = n_go.GetComponent<Node>();
+            Debug.Assert(n != null);
+            if (n.attached_elements.Count == 0)
+            {
+                nodes_to_be_removed.Add(n);
+            }
+        }
+
+        for(int node = 0; node < nodes_to_be_removed.Count; node++)
+        {
+            allnodes.Remove(nodes_to_be_removed[node]);
+            Destroy(nodes_to_be_removed[node].gameObject);
         }
     }
 

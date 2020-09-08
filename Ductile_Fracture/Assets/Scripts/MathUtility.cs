@@ -105,8 +105,8 @@ public class MathUtility
         Vector<float> x = Vector<float>.Build.DenseOfArray(new float[] { intersection_x.transform.position.x, intersection_x.transform.position.y, intersection_x.transform.position.z });
         Vector<float> y = Vector<float>.Build.DenseOfArray(new float[] { intersection_y.transform.position.x, intersection_y.transform.position.y, intersection_y.transform.position.z });
 
-        Vector<float> projection_of_x = n1 + (x - n1).DotProduct(n2 - n1) / (n2 - n1).DotProduct(n2 - n1) * (n2 - n1);
-        Vector<float> projection_of_y = n1 + (y - n1).DotProduct(n2 - n1) / (n2 - n1).DotProduct(n2 - n1) * (n2 - n1);
+        Vector<float> projection_of_x = ProjectOnto(x - n1, n2 - n1) - (x - n1);
+        Vector<float> projection_of_y = ProjectOnto(y - n1, n2 - n1) - (y - n1);
 
         return (projection_of_x.L2Norm() < projection_of_y.L2Norm()) ? intersection_x : intersection_y;
     }

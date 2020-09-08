@@ -11,6 +11,7 @@ public class Tetrahedron : MonoBehaviour
     public Node[] nodes = new Node[4];
     public List<Transform> node_transforms = new List<Transform>();
     public Dictionary<Tetrahedron, List<Node>> neighbors = new Dictionary<Tetrahedron, List<Node>>();
+    public int neighbors_count;
 
     public float volume;
     private Matrix<float> beta;
@@ -206,12 +207,17 @@ public class Tetrahedron : MonoBehaviour
         return sr;
     }
 
+    public Matrix<float> ElasticStrain()
+    {
+
+    }
 
     /* This is an elastic stress metric, takes the green strain and properties of the material being modeled,
     and produces a matrix which holds information of the internal elastic stress due to the strain. */
     public Matrix<float> ElasticStressDueToStrain(float dilation, float rigidity, Vector<float> li0, Vector<float> li1, Vector<float> li2)
     {
-        Matrix<float> gs = GreenStrain(li0, li1, li2);
+        Matrix<float> gs = GreenStrain(li0, li1, li2); // TODO swap this with elastic strain
+        Matrix<float> elastic_strain = ElasticStrain();
         Matrix<float> esdts = Matrix<float>.Build.DenseOfRowArrays(new float[][]
         {
             new float[] { 0.0f, 0.0f, 0.0f },

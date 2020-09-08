@@ -104,6 +104,7 @@ public class Node : MonoBehaviour
             if(!intersection_data.Item1 && !intersection_data.Item2 && intersection_data.Item3.Count != 0)
             {
                 two_point_intersected_tets.Add(t, intersection_points);
+                Debug.Assert(intersection_data.Item3.Count == 2);
             }
             else if(!intersection_data.Item1 && !intersection_data.Item2 && intersection_data.Item3.Count == 0)
             {
@@ -149,10 +150,6 @@ public class Node : MonoBehaviour
             {
                 not_hit_t.SwapNodes(this, kZeroMinus);
             }
-            relation_manager.UpdateRelations();
-
-            // if we have tets that are affected by a crack but they are not remeshed, they need to recalculate their beta.
-            not_hit_t.Beta();
         }
 
         // it is possible for a crack to not hit any tetrahedron, so we have to account for that.
@@ -160,12 +157,12 @@ public class Node : MonoBehaviour
         {
             if(kZeroMinus.attached_elements.Count == 0)
             {
-                DestroyImmediate(kZeroMinus_go);
+                Destroy(kZeroMinus_go);
                 new_nodes.Remove(kZeroMinus);
             }
             if (kZeroPlus.attached_elements.Count == 0)
             {
-                DestroyImmediate(kZeroPlus_go);
+                Destroy(kZeroPlus_go);
                 new_nodes.Remove(kZeroPlus);
             }
             return new Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>>(old_tetrahedra, new_tetrahedra, new_nodes);
@@ -245,14 +242,14 @@ public class Node : MonoBehaviour
                 // reassign kZeroMinus and kZeroPlus accordingly.
                 if (MathUtility.IsOnPositiveSide(not_on_face_t1, Vector<float>.Build.DenseOfArray(new float[] { transform.position.x, transform.position.y, transform.position.z }), fracture_plane_normal))
                 {
-                    coplanar_tet.Key.nodes[MathUtility.GetIndexOf(coplanar_tet.Key, not_on_face_t1)] = kZeroPlus;
-                    matching_neighbor.nodes[MathUtility.GetIndexOf(matching_neighbor, not_on_face_t2)] = kZeroMinus;
+                    coplanar_tet.Key.nodes[MathUtility.GetIndexOf(coplanar_tet.Key, this)] = kZeroPlus;
+                    matching_neighbor.nodes[MathUtility.GetIndexOf(matching_neighbor, this)] = kZeroMinus;
 
-                    int index = coplanar_tet.Key.node_transforms.IndexOf(not_on_face_t1.transform);
+                    int index = coplanar_tet.Key.node_transforms.IndexOf(this.transform);
                     coplanar_tet.Key.node_transforms.RemoveAt(index);
                     coplanar_tet.Key.node_transforms.Insert(index, kZeroPlus.transform);
 
-                    index = matching_neighbor.node_transforms.IndexOf(not_on_face_t2.transform);
+                    index = matching_neighbor.node_transforms.IndexOf(this.transform);
                     matching_neighbor.node_transforms.RemoveAt(index);
                     matching_neighbor.node_transforms.Insert(index, kZeroMinus.transform);
                 }
@@ -270,7 +267,6 @@ public class Node : MonoBehaviour
                     matching_neighbor.node_transforms.Insert(index, kZeroPlus.transform);
                 }
             }
-            relation_manager.UpdateRelations();
         }
 
         foreach(KeyValuePair<Tetrahedron, List<Tuple<Node, Node, Vector<float>>>> intersected_tet in parallel_edge_but_not_coplanar_intersected_tets)
@@ -331,10 +327,6 @@ public class Node : MonoBehaviour
                 {
                     intersected_tet.Key.SwapNodes(this, kZeroMinus);
                 }
-                relation_manager.UpdateRelations();
-
-                // if we have tets that are affected by a crack but they are not remeshed, they need to recalculate their beta.
-                intersected_tet.Key.Beta();
             }
             else if(parallel_edge_but_not_coplanar_intersected_tets.Count == 3) // there is one other intersection
             {
@@ -349,20 +341,93 @@ public class Node : MonoBehaviour
                 }
                 Debug.Assert(intersection_of_interest != null);
 
-                // separate the tetrahedron in two tetrahedra and remesh the potential neighbor at the intersected edge accordingly.
+                // separate the tetrahedron in two tetrahedra and remesh the potential neighbors at the intersected edge accordingly.
+                Vector<float> kMatPos = world_pos_of_cube - intersection_of_interest.Item3;
+                Vector<float> kWorldPos = intersection_of_interest.Item3;
 
+                GameObject k_go = Instantiate(node_prefab.gameObject, transform.parent);
+                k_go.transform.localPosition = new Vector3(kMatPos.At(0), kMatPos.At(1), kMatPos.At(2));
+                k_go.transform.position = new Vector3(kWorldPos.At(0), kWorldPos.At(1), kWorldPos.At(2));
 
-                // is there a neighbor which shares the intersected edge?
-                Tetrahedron matching_neighbor = null;
+                Node k = k_go.GetComponent<Node>();
+                k.old_world_position = new Vector3(kWorldPos.At(0), kWorldPos.At(1), kWorldPos.At(2));
+                new_nodes.Add(k);
+
+                Tetrahedron t1;
+                Tetrahedron t2;
+
+                Node x = intersection_of_interest.Item1;
+                Node y = intersection_of_interest.Item2;
+
+                // find the node that is not *this, x, or y.
+                Tetrahedron t = intersected_tet.Key;
+
+                int correct_index = -1;
+                for(int i = 0; i < 4; i++)
+                {
+                    if (!(MathUtility.GetIndexOf(t, x) == i || MathUtility.GetIndexOf(t, y) == i || MathUtility.GetIndexOf(t, this) == i))
+                    {
+                        correct_index = i;
+                    }
+                }
+
+                Debug.Assert(correct_index != -1);
+                Node z = t.nodes[correct_index];
+
+                bool x_is_on_pos_side = MathUtility.IsOnPositiveSide(x, world_pos_of_node, fracture_plane_normal);
+                if (x_is_on_pos_side)
+                {
+                    t1 = tet_builder.GenerateTetrahedron(new GameObject[] { kZeroPlus_go, x.gameObject, k_go, z.gameObject }).GetComponent<Tetrahedron>();
+                    t2 = tet_builder.GenerateTetrahedron(new GameObject[] { kZeroMinus_go, y.gameObject, k_go, z.gameObject }).GetComponent<Tetrahedron>();
+                }
+                else
+                {
+                    t1 = tet_builder.GenerateTetrahedron(new GameObject[] { kZeroPlus_go, y.gameObject, k_go, z.gameObject }).GetComponent<Tetrahedron>();
+                    t2 = tet_builder.GenerateTetrahedron(new GameObject[] { kZeroMinus_go, x.gameObject, k_go, z.gameObject }).GetComponent<Tetrahedron>();
+                }
+
+                old_tetrahedra.Add(t);
+                new_tetrahedra.Add(t1);
+                new_tetrahedra.Add(t2);
+
+                // are there neighbors which share the intersected edge?
+                List<Tuple<Tetrahedron, List<Node>>> matching_neighbors = new List<Tuple<Tetrahedron, List<Node>>>();
 
                 foreach(KeyValuePair<Tetrahedron, List<Node>> neighbor in intersected_tet.Key.neighbors)
                 {
-                    if(neighbor.Value.Contains(intersection_of_interest.Item1) && neighbor.Value.Contains(intersection_of_interest.Item2))
+                    if(neighbor.Value.Contains(x) && neighbor.Value.Contains(y))
                     {
-                        matching_neighbor = neighbor.Key;
+                        matching_neighbors.Add(new Tuple<Tetrahedron, List<Node>>(neighbor.Key, neighbor.Value));
                     }
                 }
-                // update the return-data-structures
+
+                // remesh the neighbor
+                foreach(Tuple<Tetrahedron, List<Node>> matching_n in matching_neighbors)
+                {
+                    if(matching_n.Item2.Count == 2 || (matching_n.Item2.Count == 3 && !matching_n.Item2.Contains(this)))
+                    {
+                        // find both nodes of matching_n that are not x and y
+                        Node[] n_nodes = matching_n.Item1.nodes;
+                        Node[] a_and_b = new Node[2];
+                        int index = 0;
+
+                        for(int i = 0; i < 4; i++)
+                        {
+                            if(!(i == MathUtility.GetIndexOf(matching_n.Item1, x) || i == MathUtility.GetIndexOf(matching_n.Item1, y)))
+                            {
+                                a_and_b[index] = n_nodes[i];
+                                index++;
+                            }
+                        }
+
+                        Tetrahedron t3 = tet_builder.GenerateTetrahedron(new GameObject[] { x.gameObject, k_go, a_and_b[0].gameObject, a_and_b[1].gameObject}).GetComponent<Tetrahedron>();
+                        Tetrahedron t4 = tet_builder.GenerateTetrahedron(new GameObject[] { y.gameObject, k_go, a_and_b[0].gameObject, a_and_b[1].gameObject}).GetComponent<Tetrahedron>();
+
+                        old_tetrahedra.Add(matching_n.Item1);
+                        new_tetrahedra.Add(t3);
+                        new_tetrahedra.Add(t4);
+                    }
+                }
             }
         }
 
@@ -582,9 +647,41 @@ public class Node : MonoBehaviour
                             first_found = true;
                         }
                     }
+                    Tetrahedron n_t1 = null;
+                    Tetrahedron n_t2 = null;
 
-                    Tetrahedron n_t1 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, x.gameObject, w.gameObject, z.gameObject}).GetComponent<Tetrahedron>();
-                    Tetrahedron n_t2 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, y.gameObject, w.gameObject, z.gameObject }).GetComponent<Tetrahedron>();
+                    if (w == this)
+                    {
+                        if (MathUtility.IsOnPositiveSide(x, world_pos_of_node, fracture_plane_normal))
+                        {
+                            n_t1 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, x.gameObject, kZeroPlus_go, z.gameObject }).GetComponent<Tetrahedron>();
+                            n_t2 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, y.gameObject, kZeroMinus_go, z.gameObject }).GetComponent<Tetrahedron>();
+                        }
+                        else
+                        {
+                            n_t1 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, x.gameObject, kZeroMinus_go, z.gameObject }).GetComponent<Tetrahedron>();
+                            n_t2 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, y.gameObject, kZeroPlus_go, z.gameObject }).GetComponent<Tetrahedron>();
+                        }
+                    }
+                    else if (z == this)
+                    {
+                        if (MathUtility.IsOnPositiveSide(x, world_pos_of_node, fracture_plane_normal))
+                        {
+                            n_t1 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, x.gameObject, w.gameObject, kZeroPlus_go }).GetComponent<Tetrahedron>();
+                            n_t2 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, y.gameObject, w.gameObject, kZeroMinus_go }).GetComponent<Tetrahedron>();
+                        }
+                        else
+                        {
+                            n_t1 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, x.gameObject, w.gameObject, kZeroMinus_go }).GetComponent<Tetrahedron>();
+                            n_t2 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, y.gameObject, w.gameObject, kZeroPlus_go }).GetComponent<Tetrahedron>();
+                        }
+                    }
+                    else
+                    {
+                        n_t1 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, x.gameObject, w.gameObject, z.gameObject }).GetComponent<Tetrahedron>();
+                        n_t2 = tet_builder.GenerateTetrahedron(new GameObject[] { a.gameObject, y.gameObject, w.gameObject, z.gameObject }).GetComponent<Tetrahedron>();
+                    }
+
                     new_tetrahedra.Add(n_t1);
                     new_tetrahedra.Add(n_t2);
                 }
@@ -643,9 +740,7 @@ public class Node : MonoBehaviour
                     new_tetrahedra.Add(n_t3);
                 }
             }
-            relation_manager.UpdateRelations();
         }
-        relation_manager.UpdateRelations();
         return new Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>>(old_tetrahedra, new_tetrahedra, new_nodes);
     }
 

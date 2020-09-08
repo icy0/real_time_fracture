@@ -73,5 +73,11 @@ public class RelationManager : MonoBehaviour
                 }
             }
         }
+
+        for (int tetrahedron_index = 0; tetrahedron_index < tetrahedron_gos.Length; tetrahedron_index++)
+        {
+            Tetrahedron tetrahedron = tetrahedron_gos[tetrahedron_index].GetComponent<Tetrahedron>();
+            tetrahedron.neighbors_count = tetrahedron.neighbors.Count;
+        }
     }
 }
