@@ -36,7 +36,7 @@ public class FractureSimulator : MonoBehaviour
     List<Tetrahedron> alltetrahedra = new List<Tetrahedron>();
     List<Node> allnodes = new List<Node>();
 
-    static Material glass = new Material(1.04e8f, 1.04e8f, 0.0f, 6760.0f, 2588.0f, 10140.0f, 0.0f, 0.0f);
+    static Material glass = new Material(1.04e8f, 1.04e8f, 0.0f, 6760.0f, 2588.0f, 10140.0f, 0.022f, 0.4f);
     static Material current = glass;
 
     void Start()
@@ -104,7 +104,7 @@ public class FractureSimulator : MonoBehaviour
         // update the internal forces of each tetrahedron
         foreach (Tetrahedron t in alltetrahedra)
         {
-            t.UpdateInternalForcesOfNodes(current.dilation, current.rigidity, current.phi, current.psi);
+            t.UpdateInternalForcesOfNodes(current.dilation, current.rigidity, current.phi, current.psi, current.elastic_limit, current.plastic_limit);
         }
 
         List<Node> nodes_to_be_removed = new List<Node>();
@@ -135,6 +135,12 @@ public class FractureSimulator : MonoBehaviour
                 foreach (Tetrahedron t in alltetrahedra)
                 {
                     t.Beta();
+                }
+
+                foreach(Tetrahedron t in updated_tets_and_nodes.Item2)
+                {
+                    t.ResetElasticStrain();
+                    t.ResetPlasticStrain();
                 }
             }
             n.ClearTensileAndCompressiveForces();

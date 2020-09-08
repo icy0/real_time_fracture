@@ -15,6 +15,8 @@ public class Tetrahedron : MonoBehaviour
 
     public float volume;
     private Matrix<float> beta;
+    private Matrix<float> elastic_strain;
+    private Matrix<float> plastic_strain;
 
     public void AddNode(Transform n)
     {
@@ -24,6 +26,8 @@ public class Tetrahedron : MonoBehaviour
     public void Start()
     {
         Beta();
+        ResetElasticStrain();
+        ResetPlasticStrain();
     }
 
     public void Beta()
@@ -183,7 +187,7 @@ public class Tetrahedron : MonoBehaviour
     }
 
     /* This is a strain rate metric, that measures how the strain is changing over time. Though if the strain is zero, 
-    the strain reate is zero too. */
+    the strain rate is zero too. */
     public Matrix<float> StrainRate(Matrix<float> element_speed, Vector<float> li0, Vector<float> li1, Vector<float> li2)
     {
         Vector<float> si0 = SpeedInterp(element_speed, 0);
@@ -207,17 +211,72 @@ public class Tetrahedron : MonoBehaviour
         return sr;
     }
 
-    public Matrix<float> ElasticStrain()
+    public Matrix<float> ElasticStrainDeviation()
     {
+        return elastic_strain - ((elastic_strain.Trace() / 3) * Matrix<float>.Build.DenseIdentity(3, 3));
+    }
 
+    public Matrix<float> DeltaPlasticStrain(float elastic_limit)
+    {
+        Matrix<float> elastic_strain_deviation = ElasticStrainDeviation();
+        float frob_norm_of_esd = (float)elastic_strain_deviation.FrobeniusNorm();
+        return ((frob_norm_of_esd - elastic_limit) / frob_norm_of_esd) * elastic_strain_deviation;
+    }
+    public bool VonMisesYieldCriterion(float elastic_limit)
+    {
+       return elastic_limit < ElasticStrainDeviation().FrobeniusNorm();
+    }
+
+    public void PlasticStrain(float elastic_limit, float plastic_limit)
+    {
+        if(VonMisesYieldCriterion(elastic_limit))
+        {
+            Matrix<float> step = plastic_strain + DeltaPlasticStrain(elastic_limit);
+            plastic_strain = step * Mathf.Min(1.0f, plastic_limit / (float)step.FrobeniusNorm());
+        }
+        else
+        {
+            plastic_strain = Matrix<float>.Build.DenseOfRowArrays
+            (
+                new float[] { 0.0f, 0.0f, 0.0f },
+                new float[] { 0.0f, 0.0f, 0.0f },
+                new float[] { 0.0f, 0.0f, 0.0f }
+            );
+        }
+    }
+
+    public void ElasticStrain(Vector<float> li0, Vector<float> li1, Vector<float> li2, float elastic_limit, float plastic_limit)
+    {
+        PlasticStrain(elastic_limit, plastic_limit);
+        elastic_strain = GreenStrain(li0, li1, li2) - plastic_strain;
+    }
+
+    public void ResetElasticStrain()
+    {
+        elastic_strain = Matrix<float>.Build.DenseOfRowArrays(new float[][]
+        {
+            new float[] { 0.0f, 0.0f, 0.0f },
+            new float[] { 0.0f, 0.0f, 0.0f },
+            new float[] { 0.0f, 0.0f, 0.0f }
+        });
+    }
+
+    public void ResetPlasticStrain()
+    {
+        plastic_strain = Matrix<float>.Build.DenseOfRowArrays(new float[][]
+        {
+            new float[] { 0.0f, 0.0f, 0.0f },
+            new float[] { 0.0f, 0.0f, 0.0f },
+            new float[] { 0.0f, 0.0f, 0.0f }
+        });
     }
 
     /* This is an elastic stress metric, takes the green strain and properties of the material being modeled,
     and produces a matrix which holds information of the internal elastic stress due to the strain. */
-    public Matrix<float> ElasticStressDueToStrain(float dilation, float rigidity, Vector<float> li0, Vector<float> li1, Vector<float> li2)
+    public Matrix<float> ElasticStressDueToStrain(float dilation, float rigidity, Vector<float> li0, Vector<float> li1, Vector<float> li2, float elastic_limit, float plastic_limit)
     {
-        Matrix<float> gs = GreenStrain(li0, li1, li2); // TODO swap this with elastic strain
-        Matrix<float> elastic_strain = ElasticStrain();
+        // Matrix<float> gs = GreenStrain(li0, li1, li2);
+        ElasticStrain(li0, li1, li2, elastic_limit, plastic_limit);
         Matrix<float> esdts = Matrix<float>.Build.DenseOfRowArrays(new float[][]
         {
             new float[] { 0.0f, 0.0f, 0.0f },
@@ -232,9 +291,11 @@ public class Tetrahedron : MonoBehaviour
                 float tmp = 0.0f;
                 for (int k = 0; k < 3; k++)
                 {
-                    tmp += dilation * gs.At(k, k) * MathUtility.KroneckerDelta(row, column);
+                    // tmp += dilation * gs.At(k, k) * MathUtility.KroneckerDelta(row, column);
+                    tmp += dilation * elastic_strain.At(k, k) * MathUtility.KroneckerDelta(row, column);
                 }
-                tmp += 2.0f * rigidity * gs.At(row, column);
+                // tmp += 2.0f * rigidity * gs.At(row, column);
+                tmp += 2.0f * rigidity * elastic_strain.At(row, column);
                 esdts.At(row, column, tmp);
             }
         }
@@ -269,7 +330,7 @@ public class Tetrahedron : MonoBehaviour
         return vsdtsr;
     }
 
-    public Matrix<float> TotalInternalStress(float dilation, float rigidity, float phi, float psi)
+    public Matrix<float> TotalInternalStress(float dilation, float rigidity, float phi, float psi, float elastic_limit, float plastic_limit)
     {
         Matrix<float> element_location = ElemLoc();
         Debug.Assert(element_location.Row(0).Count == 4);
@@ -283,7 +344,7 @@ public class Tetrahedron : MonoBehaviour
         Debug.Assert(element_speed.Row(0).Count == 4);
         Debug.Assert(element_speed.Column(0).Count == 3);
 
-        return ElasticStressDueToStrain(dilation, rigidity, li0, li1, li2) + ViscousStressDueToStrainRate(phi, psi, element_speed, li0, li1, li2);
+        return ElasticStressDueToStrain(dilation, rigidity, li0, li1, li2, elastic_limit, plastic_limit) + ViscousStressDueToStrainRate(phi, psi, element_speed, li0, li1, li2);
     }
 
     // TODO assumption is made here: that Eigenvectors.Column(i) is corresponding to Eigenvalue.At(i). this is not necessarily correct.
@@ -391,9 +452,9 @@ public class Tetrahedron : MonoBehaviour
         return tf;
     }
 
-    public void UpdateInternalForcesOfNodes(float dilation, float rigidity, float phi, float psi)
+    public void UpdateInternalForcesOfNodes(float dilation, float rigidity, float phi, float psi, float elastic_limit, float plastic_limit)
     {
-        Matrix<float> total_internal_stress = TotalInternalStress(dilation, rigidity, phi, psi);
+        Matrix<float> total_internal_stress = TotalInternalStress(dilation, rigidity, phi, psi, elastic_limit, plastic_limit);
         Debug.Assert(total_internal_stress.IsSymmetric(), "The total internal stress tensor is not symmetric.");
 
         Evd<float> evd_of_total_internal_stress = total_internal_stress.Evd(Symmetricity.Symmetric);
