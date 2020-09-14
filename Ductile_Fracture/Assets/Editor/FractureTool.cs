@@ -108,9 +108,6 @@ public class FractureTool : EditorWindow, IPositionChangeListener
         }
         if (GUILayout.Button("Spawn Fracture Plane at Node"))
         {
-            // TODO make the user place the fracture plane
-            // TODO call Crack() on that node
-
             GameObject[] selected_gameobjects = Selection.gameObjects;
             if (selected_gameobjects.Length == 1 && selected_gameobjects[0].tag == "FEM_Node")
             {
