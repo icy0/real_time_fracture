@@ -2,8 +2,6 @@
 using System;
 using UnityEngine;
 using MathNet.Numerics.LinearAlgebra;
-using MathNet.Numerics.LinearAlgebra.Factorization;
-
 
 public class FractureSimulator : MonoBehaviour
 {
@@ -43,6 +41,7 @@ public class FractureSimulator : MonoBehaviour
     {
         relation_manager = GameObject.Find("FEM_Mesh").GetComponent<RelationManager>();
         relation_manager.UpdateRelations();
+
         Time.fixedDeltaTime = 0.1f;
         GameObject[] nodes = GameObject.FindGameObjectsWithTag("FEM_Node");
         GameObject[] tetrahedra = GameObject.FindGameObjectsWithTag("FEM_Tetrahedron");
@@ -60,64 +59,35 @@ public class FractureSimulator : MonoBehaviour
         }
 
         Debug.Log("There are " + alltetrahedra.Count + " Tetrahedra and " + allnodes.Count + " Nodes.");
-
-        // DEBUG CODE:
-        foreach(GameObject n in nodes)
-        {
-            if (n.GetComponent<Node>().crack_at_start)
-            {
-                n.GetComponent<Node>().fracture_plane_normal = GetNormalFromPlane(GameObject.Find("Fracture_Plane"));
-                Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> result = n.GetComponent<Node>().Crack(n.transform.parent.position);
-
-                // update tetrahedra collections
-                foreach(Tetrahedron t in result.Item1)
-                {
-                    alltetrahedra.Remove(t);
-                    DestroyImmediate(t.gameObject);
-                }
-                alltetrahedra.AddRange(result.Item2);
-
-                // update node collections
-                allnodes.Remove(n.GetComponent<Node>());
-                DestroyImmediate(n.gameObject);
-                allnodes.AddRange(result.Item3);
-                break;
-            }
-        }
     }
 
-    Vector<float> GetNormalFromPlane(GameObject fracture_plane)
-    {
-        Vector3 normal = fracture_plane.transform.up;
-        return Vector<float>.Build.DenseOfArray(new float[] { normal.x, normal.y, normal.z});
-    }
 
     private void FixedUpdate()
     {
+        List<Node> nodes_to_be_removed = new List<Node>();
+
         // calculate velocity of each node
         foreach (Node n in allnodes)
         {
-            n.velocity = (n.transform.position - n.old_world_position) / Time.deltaTime; // not sure if division by time or multiplication with time
+            n.velocity = (n.transform.position - n.old_world_position) / Time.deltaTime;
             n.old_world_position = n.transform.position;
         }
 
-        // update the internal forces of each tetrahedron
+        // update the internal forces of each tetrahedron and
+        // apply these forces to the attached nodes
         foreach (Tetrahedron t in alltetrahedra)
         {
             t.UpdateInternalForcesOfNodes(current.dilation, current.rigidity, current.phi, current.psi, current.elastic_limit, current.plastic_limit);
         }
-
-        List<Node> nodes_to_be_removed = new List<Node>();
 
         // check if any node exceeds its deformation limit
         int node_count = allnodes.Count;
         for (int i = 0; i < node_count; i++)
         {
             Node n = allnodes[i];
-            if (n.DoesCrackOccur(current.toughness))
+            if (n.IsExceedingDeformationLimit(current.toughness))
             {
-                nodes_to_be_removed.Add(n);
-                Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> updated_tets_and_nodes = n.Crack(transform.position);
+                Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> updated_tets_and_nodes = n.Remesh(transform.position);
 
                 foreach (Tetrahedron t in updated_tets_and_nodes.Item1)
                 {
@@ -162,9 +132,5 @@ public class FractureSimulator : MonoBehaviour
             allnodes.Remove(nodes_to_be_removed[node]);
             Destroy(nodes_to_be_removed[node].gameObject);
         }
-    }
-
-    void Update()
-    {
     }
 }

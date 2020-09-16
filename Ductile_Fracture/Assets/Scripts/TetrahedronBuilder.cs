@@ -4,7 +4,6 @@ using UnityEngine;
 
 public class TetrahedronBuilder : MonoBehaviour
 {
-    public static Material tet_material;
     private bool RayTriangleIntersection(Vector3 ray_origin, Vector3 ray_direction, Vector3[] triangle_vertices)
     {
         Debug.Assert(triangle_vertices.Length == 3);
@@ -38,8 +37,6 @@ public class TetrahedronBuilder : MonoBehaviour
     {
         Debug.Assert(triangle_vertices.Length == 3);
         return Vector3.Normalize(Vector3.Cross(triangle_vertices[1] - triangle_vertices[0], triangle_vertices[2] - triangle_vertices[0]));
-        // POTENTIAL ERROR this does not necessarily yield the correct normal direction
-        // Fast workaround implemented.
     }
 
     private void BuildTetrahedron(ref Vector3[] vertices, out int[] vertex_indices, out Vector3[] normals)
@@ -83,14 +80,14 @@ public class TetrahedronBuilder : MonoBehaviour
         }
     }
 
-    public GameObject GenerateTetrahedron(GameObject[] selected_gameobjects)
+    public GameObject GenerateTetrahedron(GameObject[] nodes)
     {
         GameObject tetrahedron_go = new GameObject("Tetrahedron");
         Mesh tetrahedron_mesh = new Mesh();
         Vector3[] vertices = new Vector3[4];
         for (int i = 0; i < 4; i++)
         {
-            vertices[i] = selected_gameobjects[i].transform.position;
+            vertices[i] = nodes[i].transform.position;
         }
 
         int[] vertex_indices;
@@ -109,7 +106,7 @@ public class TetrahedronBuilder : MonoBehaviour
         Tetrahedron tetrahedron = tetrahedron_go.AddComponent<Tetrahedron>();
         for (int i = 0; i < 4; i++)
         {
-            tetrahedron.AddNode(selected_gameobjects[i].transform);
+            tetrahedron.AddNode(nodes[i].transform);
         }
         
         for(int i = 0; i < 4; i++)

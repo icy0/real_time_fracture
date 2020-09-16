@@ -7,5 +7,5 @@ using UnityEngine;
 
 public interface IPositionChangeListener
 {
-    void UpdateListener(GameObject x);
+    void UpdateListener(GameObject changed_node);
 }

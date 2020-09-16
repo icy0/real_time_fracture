@@ -1,6 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Collections.Generic;
 using System;
 using UnityEngine;
 using MathNet.Numerics.LinearAlgebra;
@@ -11,7 +9,7 @@ public class Tetrahedron : MonoBehaviour
     public Node[] nodes = new Node[4];
     public List<Transform> node_transforms = new List<Transform>();
     public Dictionary<Tetrahedron, List<Node>> neighbors = new Dictionary<Tetrahedron, List<Node>>();
-    public int neighbors_count;
+    public int neighbors_count; // DEBUG
 
     public float volume;
     private Matrix<float> beta;
@@ -28,19 +26,6 @@ public class Tetrahedron : MonoBehaviour
         Beta();
         ResetElasticStrain();
         ResetPlasticStrain();
-    }
-
-    public void Beta()
-    {
-        beta = Matrix<float>.Build.DenseOfRowArrays(new float[][]
-        {
-            new float[] { nodes[0].transform.localPosition.x, nodes[1].transform.localPosition.x, nodes[2].transform.localPosition.x, nodes[3].transform.localPosition.x},
-            new float[] { nodes[0].transform.localPosition.y, nodes[1].transform.localPosition.y, nodes[2].transform.localPosition.y, nodes[3].transform.localPosition.y},
-            new float[] { nodes[0].transform.localPosition.z, nodes[1].transform.localPosition.z, nodes[2].transform.localPosition.z, nodes[3].transform.localPosition.z},
-            new float[] { 1.0f, 1.0f, 1.0f, 1.0f},
-        });
-
-        beta = beta.Inverse();
     }
 
     public Tuple<bool /*is there an edge of the tet that is parallel to the fracture plane and is the fp NOT parallel to a face*/, 
@@ -106,16 +91,6 @@ public class Tetrahedron : MonoBehaviour
         node_transforms[index_of_tbs] = new_node.transform;
     }
 
-    public void DrawEdges()
-    {
-        Debug.DrawLine(nodes[0].transform.position, nodes[1].transform.position);
-        Debug.DrawLine(nodes[0].transform.position, nodes[2].transform.position);
-        Debug.DrawLine(nodes[0].transform.position, nodes[3].transform.position);
-        Debug.DrawLine(nodes[1].transform.position, nodes[2].transform.position);
-        Debug.DrawLine(nodes[1].transform.position, nodes[3].transform.position);
-        Debug.DrawLine(nodes[2].transform.position, nodes[3].transform.position);
-    }
-
     public void AddNeighbor(Tetrahedron neighbor, Node node)
     {
         if (!neighbors.ContainsKey(neighbor))
@@ -123,132 +98,6 @@ public class Tetrahedron : MonoBehaviour
             neighbors[neighbor] = new List<Node>();
         }
         neighbors[neighbor].Add(node);
-    }
-
-    public float Volume()
-    {
-        return 1 / 6.0f * Mathf.Abs(Vector3.Dot(Vector3.Cross(nodes[1].transform.localPosition - nodes[0].transform.localPosition, nodes[2].transform.localPosition - nodes[0].transform.localPosition), (nodes[3].transform.localPosition - nodes[0].transform.localPosition)));
-    }
-
-    public Matrix<float> ElemLoc()
-    {
-        return Matrix<float>.Build.DenseOfRowArrays(new float[][]
-        {
-            new float[] { nodes[0].transform.position.x, nodes[1].transform.position.x, nodes[2].transform.position.x, nodes[3].transform.position.x},
-            new float[] { nodes[0].transform.position.y, nodes[1].transform.position.y, nodes[2].transform.position.y, nodes[3].transform.position.y},
-            new float[] { nodes[0].transform.position.z, nodes[1].transform.position.z, nodes[2].transform.position.z, nodes[3].transform.position.z},
-        });
-    }
-
-    public Matrix<float> ElemSpeed()
-    {
-        return Matrix<float>.Build.DenseOfRowArrays(new float[][]
-        {
-            new float[] { nodes[0].velocity.x, nodes[1].velocity.x, nodes[2].velocity.x, nodes[3].velocity.x},
-            new float[] { nodes[0].velocity.y, nodes[1].velocity.y, nodes[2].velocity.y, nodes[3].velocity.y},
-            new float[] { nodes[0].velocity.z, nodes[1].velocity.z, nodes[2].velocity.z, nodes[3].velocity.z},
-        });
-    }
-
-    public Vector<float> LocInterp(Matrix<float> element_location, int i)
-    {
-        Vector<float> kron_delta_vector = MathUtility.KroneckerDeltaVector(i + 1);
-        Debug.Assert(kron_delta_vector.Count == 4);
-        Debug.Assert(element_location != null);
-        Debug.Assert(beta != null, "Beta was null. Have a look at " + this.name);
-        Debug.Assert(kron_delta_vector != null);
-
-        return element_location * beta * kron_delta_vector;
-    }
-
-    public Vector<float> SpeedInterp(Matrix<float> element_speed, int i)
-    {
-        Vector<float> kron_delta_vector = MathUtility.KroneckerDeltaVector(i + 1);
-        Debug.Assert(kron_delta_vector.Count == 4);
-
-        return element_speed * beta * kron_delta_vector;
-    }
-
-    /* This is a strain metric, that only measures deformation and is invariant with respect
-    to rigidbody transformations. */
-    public Matrix<float> GreenStrain(Vector<float> li0, Vector<float> li1, Vector<float> li2)
-    {
-        Matrix<float> gs = Matrix<float>.Build.DenseOfRowArrays(new float[][]
-        {
-            new float[] { li0 * li0 - 1.0f, li1 * li0, li2 * li0},
-            new float[] { li0 * li1, li1 * li1 - 1.0f, li2 * li1},
-            new float[] { li0 * li2, li1 * li2, li2 * li2 - 1.0f}
-        });
-
-        Debug.Assert(gs.Column(0).Count == 3);
-        Debug.Assert(gs.Row(0).Count == 3);
-
-        return gs;
-    }
-
-    /* This is a strain rate metric, that measures how the strain is changing over time. Though if the strain is zero, 
-    the strain rate is zero too. */
-    public Matrix<float> StrainRate(Matrix<float> element_speed, Vector<float> li0, Vector<float> li1, Vector<float> li2)
-    {
-        Vector<float> si0 = SpeedInterp(element_speed, 0);
-        Vector<float> si1 = SpeedInterp(element_speed, 1);
-        Vector<float> si2 = SpeedInterp(element_speed, 2);
-
-        Debug.Assert(si0.Count == 3);
-        Debug.Assert(si1.Count == 3);
-        Debug.Assert(si2.Count == 3);
-
-        Matrix<float> sr = Matrix<float>.Build.DenseOfRowArrays(new float[][]
-        {
-            new float[] { (li0 * si0) + (si0 * li0), (li0 * si1) + (si0 * li1), (li0 * si2) + (si0 * li2) },
-            new float[] { (li1 * si0) + (si1 * li0), (li1 * si1) + (si1 * li1), (li1 * si2) + (si1 * li2) },
-            new float[] { (li2 * si0) + (si2 * li0), (li2 * si1) + (si2 * li1), (li2 * si2) + (si2 * li2) }
-        });
-
-        Debug.Assert(sr.Column(0).Count == 3);
-        Debug.Assert(sr.Row(0).Count == 3);
-
-        return sr;
-    }
-
-    public Matrix<float> ElasticStrainDeviation()
-    {
-        return elastic_strain - ((elastic_strain.Trace() / 3) * Matrix<float>.Build.DenseIdentity(3, 3));
-    }
-
-    public Matrix<float> DeltaPlasticStrain(float elastic_limit)
-    {
-        Matrix<float> elastic_strain_deviation = ElasticStrainDeviation();
-        float frob_norm_of_esd = (float)elastic_strain_deviation.FrobeniusNorm();
-        return ((frob_norm_of_esd - elastic_limit) / frob_norm_of_esd) * elastic_strain_deviation;
-    }
-    public bool VonMisesYieldCriterion(float elastic_limit)
-    {
-       return elastic_limit < ElasticStrainDeviation().FrobeniusNorm();
-    }
-
-    public void PlasticStrain(float elastic_limit, float plastic_limit)
-    {
-        if(VonMisesYieldCriterion(elastic_limit))
-        {
-            Matrix<float> step = plastic_strain + DeltaPlasticStrain(elastic_limit);
-            plastic_strain = step * Mathf.Min(1.0f, plastic_limit / (float)step.FrobeniusNorm());
-        }
-        else
-        {
-            plastic_strain = Matrix<float>.Build.DenseOfRowArrays
-            (
-                new float[] { 0.0f, 0.0f, 0.0f },
-                new float[] { 0.0f, 0.0f, 0.0f },
-                new float[] { 0.0f, 0.0f, 0.0f }
-            );
-        }
-    }
-
-    public void ElasticStrain(Vector<float> li0, Vector<float> li1, Vector<float> li2, float elastic_limit, float plastic_limit)
-    {
-        PlasticStrain(elastic_limit, plastic_limit);
-        elastic_strain = GreenStrain(li0, li1, li2) - plastic_strain;
     }
 
     public void ResetElasticStrain()
@@ -271,11 +120,109 @@ public class Tetrahedron : MonoBehaviour
         });
     }
 
+    public void Beta()
+    {
+        beta = Matrix<float>.Build.DenseOfRowArrays(new float[][]
+        {
+            new float[] { nodes[0].transform.localPosition.x, nodes[1].transform.localPosition.x, nodes[2].transform.localPosition.x, nodes[3].transform.localPosition.x},
+            new float[] { nodes[0].transform.localPosition.y, nodes[1].transform.localPosition.y, nodes[2].transform.localPosition.y, nodes[3].transform.localPosition.y},
+            new float[] { nodes[0].transform.localPosition.z, nodes[1].transform.localPosition.z, nodes[2].transform.localPosition.z, nodes[3].transform.localPosition.z},
+            new float[] { 1.0f, 1.0f, 1.0f, 1.0f},
+        });
+
+        beta = beta.Inverse();
+    }
+
+    private float Volume()
+    {
+        return 1 / 6.0f * Mathf.Abs(Vector3.Dot(Vector3.Cross(nodes[1].transform.localPosition - nodes[0].transform.localPosition, nodes[2].transform.localPosition - nodes[0].transform.localPosition), (nodes[3].transform.localPosition - nodes[0].transform.localPosition)));
+    }
+
+    private Matrix<float> P()
+    {
+        return Matrix<float>.Build.DenseOfRowArrays(new float[][]
+        {
+            new float[] { nodes[0].transform.position.x, nodes[1].transform.position.x, nodes[2].transform.position.x, nodes[3].transform.position.x},
+            new float[] { nodes[0].transform.position.y, nodes[1].transform.position.y, nodes[2].transform.position.y, nodes[3].transform.position.y},
+            new float[] { nodes[0].transform.position.z, nodes[1].transform.position.z, nodes[2].transform.position.z, nodes[3].transform.position.z},
+        });
+    }
+
+    private Matrix<float> V()
+    {
+        return Matrix<float>.Build.DenseOfRowArrays(new float[][]
+        {
+            new float[] { nodes[0].velocity.x, nodes[1].velocity.x, nodes[2].velocity.x, nodes[3].velocity.x},
+            new float[] { nodes[0].velocity.y, nodes[1].velocity.y, nodes[2].velocity.y, nodes[3].velocity.y},
+            new float[] { nodes[0].velocity.z, nodes[1].velocity.z, nodes[2].velocity.z, nodes[3].velocity.z},
+        });
+    }
+
+    private Vector<float> PartDerivOfXWithRespectToU(Matrix<float> P, int i)
+    {
+        Vector<float> kron_delta_vector = MathUtility.KroneckerDeltaVector(i + 1);
+        Debug.Assert(kron_delta_vector.Count == 4);
+        Debug.Assert(P != null);
+        Debug.Assert(beta != null, "Beta is null. Have a look at " + this.name);
+        Debug.Assert(kron_delta_vector != null);
+
+        return P * beta * kron_delta_vector;
+    }
+
+    private Vector<float> PartDerivOfXDotWithRespectToU(Matrix<float> V, int i)
+    {
+        Vector<float> kron_delta_vector = MathUtility.KroneckerDeltaVector(i + 1);
+        Debug.Assert(kron_delta_vector.Count == 4);
+
+        return V * beta * kron_delta_vector;
+    }
+
+    /* This is a strain metric, that only measures deformation and is invariant with respect
+    to rigidbody transformations. */
+    private Matrix<float> GreenStrain(Vector<float> li0, Vector<float> li1, Vector<float> li2)
+    {
+        Matrix<float> gs = Matrix<float>.Build.DenseOfRowArrays(new float[][]
+        {
+            new float[] { li0 * li0 - 1.0f, li1 * li0, li2 * li0},
+            new float[] { li0 * li1, li1 * li1 - 1.0f, li2 * li1},
+            new float[] { li0 * li2, li1 * li2, li2 * li2 - 1.0f}
+        });
+
+        Debug.Assert(gs.Column(0).Count == 3);
+        Debug.Assert(gs.Row(0).Count == 3);
+
+        return gs;
+    }
+
+    /* This is a strain rate metric, that measures how the strain is changing over time. If the strain is zero, 
+    the strain rate is zero too. */
+    private Matrix<float> StrainRate(Matrix<float> element_speed, Vector<float> li0, Vector<float> li1, Vector<float> li2)
+    {
+        Vector<float> si0 = PartDerivOfXDotWithRespectToU(element_speed, 0);
+        Vector<float> si1 = PartDerivOfXDotWithRespectToU(element_speed, 1);
+        Vector<float> si2 = PartDerivOfXDotWithRespectToU(element_speed, 2);
+
+        Debug.Assert(si0.Count == 3);
+        Debug.Assert(si1.Count == 3);
+        Debug.Assert(si2.Count == 3);
+
+        Matrix<float> sr = Matrix<float>.Build.DenseOfRowArrays(new float[][]
+        {
+            new float[] { (li0 * si0) + (si0 * li0), (li0 * si1) + (si0 * li1), (li0 * si2) + (si0 * li2) },
+            new float[] { (li1 * si0) + (si1 * li0), (li1 * si1) + (si1 * li1), (li1 * si2) + (si1 * li2) },
+            new float[] { (li2 * si0) + (si2 * li0), (li2 * si1) + (si2 * li1), (li2 * si2) + (si2 * li2) }
+        });
+
+        Debug.Assert(sr.Column(0).Count == 3);
+        Debug.Assert(sr.Row(0).Count == 3);
+
+        return sr;
+    }
+
     /* This is an elastic stress metric, takes the green strain and properties of the material being modeled,
     and produces a matrix which holds information of the internal elastic stress due to the strain. */
-    public Matrix<float> ElasticStressDueToStrain(float dilation, float rigidity, Vector<float> li0, Vector<float> li1, Vector<float> li2, float elastic_limit, float plastic_limit)
+    private Matrix<float> ElasticStressDueToStrain(float dilation, float rigidity, Vector<float> li0, Vector<float> li1, Vector<float> li2, float elastic_limit, float plastic_limit)
     {
-        // Matrix<float> gs = GreenStrain(li0, li1, li2);
         ElasticStrain(li0, li1, li2, elastic_limit, plastic_limit);
         Matrix<float> esdts = Matrix<float>.Build.DenseOfRowArrays(new float[][]
         {
@@ -291,10 +238,8 @@ public class Tetrahedron : MonoBehaviour
                 float tmp = 0.0f;
                 for (int k = 0; k < 3; k++)
                 {
-                    // tmp += dilation * gs.At(k, k) * MathUtility.KroneckerDelta(row, column);
                     tmp += dilation * elastic_strain.At(k, k) * MathUtility.KroneckerDelta(row, column);
                 }
-                // tmp += 2.0f * rigidity * gs.At(row, column);
                 tmp += 2.0f * rigidity * elastic_strain.At(row, column);
                 esdts.At(row, column, tmp);
             }
@@ -303,7 +248,7 @@ public class Tetrahedron : MonoBehaviour
         return esdts;
     }
 
-    public Matrix<float> ViscousStressDueToStrainRate(float phi, float psi, Matrix<float> element_speed, Vector<float> li0, Vector<float> li1, Vector<float> li2)
+    private Matrix<float> ViscousStressDueToStrainRate(float phi, float psi, Matrix<float> element_speed, Vector<float> li0, Vector<float> li1, Vector<float> li2)
     {
         Matrix<float> sr = StrainRate(element_speed, li0, li1, li2);
         Matrix<float> vsdtsr = Matrix<float>.Build.DenseOfRowArrays(new float[][]
@@ -330,25 +275,24 @@ public class Tetrahedron : MonoBehaviour
         return vsdtsr;
     }
 
-    public Matrix<float> TotalInternalStress(float dilation, float rigidity, float phi, float psi, float elastic_limit, float plastic_limit)
+    private Matrix<float> TotalInternalStress(float dilation, float rigidity, float phi, float psi, float elastic_limit, float plastic_limit)
     {
-        Matrix<float> element_location = ElemLoc();
+        Matrix<float> element_location = P();
         Debug.Assert(element_location.Row(0).Count == 4);
         Debug.Assert(element_location.Column(0).Count == 3);
 
-        Vector<float> li0 = LocInterp(element_location, 0);
-        Vector<float> li1 = LocInterp(element_location, 1);
-        Vector<float> li2 = LocInterp(element_location, 2);
+        Vector<float> li0 = PartDerivOfXWithRespectToU(element_location, 0);
+        Vector<float> li1 = PartDerivOfXWithRespectToU(element_location, 1);
+        Vector<float> li2 = PartDerivOfXWithRespectToU(element_location, 2);
 
-        Matrix<float> element_speed = ElemSpeed();
+        Matrix<float> element_speed = V();
         Debug.Assert(element_speed.Row(0).Count == 4);
         Debug.Assert(element_speed.Column(0).Count == 3);
 
         return ElasticStressDueToStrain(dilation, rigidity, li0, li1, li2, elastic_limit, plastic_limit) + ViscousStressDueToStrainRate(phi, psi, element_speed, li0, li1, li2);
     }
 
-    // TODO assumption is made here: that Eigenvectors.Column(i) is corresponding to Eigenvalue.At(i). this is not necessarily correct.
-    public Matrix<float> TensileComponentOfTotalInternalStress(Evd<float> evd_of_total_internal_stress)
+    private Matrix<float> TensileComponentOfTotalInternalStress(Evd<float> evd_of_total_internal_stress)
     {
         Matrix<float> tcotis = Matrix<float>.Build.DenseOfRowArrays(new float[][]
         {
@@ -370,7 +314,7 @@ public class Tetrahedron : MonoBehaviour
         return tcotis;
     }
 
-    public Matrix<float> CompressiveComponentOfTotalInternalStress(Evd<float> evd_of_total_internal_stress)
+    private Matrix<float> CompressiveComponentOfTotalInternalStress(Evd<float> evd_of_total_internal_stress)
     {
         Matrix<float> ccotis = Matrix<float>.Build.DenseOfRowArrays(new float[][]
         {
@@ -392,7 +336,7 @@ public class Tetrahedron : MonoBehaviour
         return ccotis;
     }
 
-    public Vector<float> TensileForce(float volume, Evd<float> evd_of_total_internal_stress, int node_index)
+    private Vector<float> TensileForce(float volume, Evd<float> evd_of_total_internal_stress, int node_index)
     {
         Matrix<float> tcotis = TensileComponentOfTotalInternalStress(evd_of_total_internal_stress);
         Vector<float> tf = Vector<float>.Build.DenseOfArray(new float[] { 0.0f, 0.0f, 0.0f });
@@ -422,7 +366,7 @@ public class Tetrahedron : MonoBehaviour
         return tf;
     }
 
-    public Vector<float> CompressiveForce(float volume, Evd<float> evd_of_total_internal_stress, int node_index)
+    private Vector<float> CompressiveForce(float volume, Evd<float> evd_of_total_internal_stress, int node_index)
     {
         Matrix<float> ccotis = CompressiveComponentOfTotalInternalStress(evd_of_total_internal_stress);
         Vector<float> tf = Vector<float>.Build.DenseOfArray(new float[] { 0.0f, 0.0f, 0.0f });
@@ -464,6 +408,46 @@ public class Tetrahedron : MonoBehaviour
         {
             nodes[i].AddTensileForce(TensileForce(volume, evd_of_total_internal_stress, i));
             nodes[i].AddCompressiveForce(CompressiveForce(volume, evd_of_total_internal_stress, i));
+        }
+    }
+
+    private void ElasticStrain(Vector<float> li0, Vector<float> li1, Vector<float> li2, float elastic_limit, float plastic_limit)
+    {
+        PlasticStrain(elastic_limit, plastic_limit);
+        elastic_strain = GreenStrain(li0, li1, li2) - plastic_strain;
+    }
+
+    private Matrix<float> ElasticStrainDeviation()
+    {
+        return elastic_strain - ((elastic_strain.Trace() / 3) * Matrix<float>.Build.DenseIdentity(3, 3));
+    }
+
+    private Matrix<float> DeltaPlasticStrain(float elastic_limit)
+    {
+        Matrix<float> elastic_strain_deviation = ElasticStrainDeviation();
+        float frob_norm_of_esd = (float)elastic_strain_deviation.FrobeniusNorm();
+        return ((frob_norm_of_esd - elastic_limit) / frob_norm_of_esd) * elastic_strain_deviation;
+    }
+    private bool VonMisesYieldCriterion(float elastic_limit)
+    {
+        return elastic_limit < ElasticStrainDeviation().FrobeniusNorm();
+    }
+
+    private void PlasticStrain(float elastic_limit, float plastic_limit)
+    {
+        if (VonMisesYieldCriterion(elastic_limit))
+        {
+            Matrix<float> step = plastic_strain + DeltaPlasticStrain(elastic_limit);
+            plastic_strain = step * Mathf.Min(1.0f, plastic_limit / (float)step.FrobeniusNorm());
+        }
+        else
+        {
+            plastic_strain = Matrix<float>.Build.DenseOfRowArrays
+            (
+                new float[] { 0.0f, 0.0f, 0.0f },
+                new float[] { 0.0f, 0.0f, 0.0f },
+                new float[] { 0.0f, 0.0f, 0.0f }
+            );
         }
     }
 }

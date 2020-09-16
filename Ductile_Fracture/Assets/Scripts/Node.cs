@@ -9,9 +9,6 @@ public class Node : MonoBehaviour
     [SerializeField]
     private Transform node_prefab;
 
-    [SerializeField]
-    public bool crack_at_start;
-
     public Vector3 old_world_position;
     public Vector3 velocity;
 
@@ -27,7 +24,7 @@ public class Node : MonoBehaviour
         old_world_position = transform.position;
     }
 
-    public Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> Crack(Vector3 world_position_of_simulated_object)
+    public Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> Remesh(Vector3 world_position_of_simulated_object)
     {
         Vector<float> world_pos_of_node = Vector<float>.Build.DenseOfArray(new float[] 
         { 
@@ -334,7 +331,7 @@ public class Node : MonoBehaviour
                 // find the one intersection case that has a non-null Vector as the intersection point
                 foreach (Tuple<Node, Node, Vector<float>> intersection in intersected_tet.Value)
                 {
-                    if(intersection.Item3 != null)
+                    if (intersection.Item3 != null)
                     {
                         intersection_of_interest = intersection;
                     }
@@ -363,7 +360,7 @@ public class Node : MonoBehaviour
                 Tetrahedron t = intersected_tet.Key;
 
                 int correct_index = -1;
-                for(int i = 0; i < 4; i++)
+                for (int i = 0; i < 4; i++)
                 {
                     if (!(MathUtility.GetIndexOf(t, x) == i || MathUtility.GetIndexOf(t, y) == i || MathUtility.GetIndexOf(t, this) == i))
                     {
@@ -393,35 +390,35 @@ public class Node : MonoBehaviour
                 // are there neighbors which share the intersected edge?
                 List<Tuple<Tetrahedron, List<Node>>> matching_neighbors = new List<Tuple<Tetrahedron, List<Node>>>();
 
-                foreach(KeyValuePair<Tetrahedron, List<Node>> neighbor in intersected_tet.Key.neighbors)
+                foreach (KeyValuePair<Tetrahedron, List<Node>> neighbor in intersected_tet.Key.neighbors)
                 {
-                    if(neighbor.Value.Contains(x) && neighbor.Value.Contains(y))
+                    if (neighbor.Value.Contains(x) && neighbor.Value.Contains(y))
                     {
                         matching_neighbors.Add(new Tuple<Tetrahedron, List<Node>>(neighbor.Key, neighbor.Value));
                     }
                 }
 
                 // remesh the neighbor
-                foreach(Tuple<Tetrahedron, List<Node>> matching_n in matching_neighbors)
+                foreach (Tuple<Tetrahedron, List<Node>> matching_n in matching_neighbors)
                 {
-                    if(matching_n.Item2.Count == 2 || (matching_n.Item2.Count == 3 && !matching_n.Item2.Contains(this)))
+                    if (matching_n.Item2.Count == 2 || (matching_n.Item2.Count == 3 && !matching_n.Item2.Contains(this)))
                     {
                         // find both nodes of matching_n that are not x and y
                         Node[] n_nodes = matching_n.Item1.nodes;
                         Node[] a_and_b = new Node[2];
                         int index = 0;
 
-                        for(int i = 0; i < 4; i++)
+                        for (int i = 0; i < 4; i++)
                         {
-                            if(!(i == MathUtility.GetIndexOf(matching_n.Item1, x) || i == MathUtility.GetIndexOf(matching_n.Item1, y)))
+                            if (!(i == MathUtility.GetIndexOf(matching_n.Item1, x) || i == MathUtility.GetIndexOf(matching_n.Item1, y)))
                             {
                                 a_and_b[index] = n_nodes[i];
                                 index++;
                             }
                         }
 
-                        Tetrahedron t3 = tet_builder.GenerateTetrahedron(new GameObject[] { x.gameObject, k_go, a_and_b[0].gameObject, a_and_b[1].gameObject}).GetComponent<Tetrahedron>();
-                        Tetrahedron t4 = tet_builder.GenerateTetrahedron(new GameObject[] { y.gameObject, k_go, a_and_b[0].gameObject, a_and_b[1].gameObject}).GetComponent<Tetrahedron>();
+                        Tetrahedron t3 = tet_builder.GenerateTetrahedron(new GameObject[] { x.gameObject, k_go, a_and_b[0].gameObject, a_and_b[1].gameObject }).GetComponent<Tetrahedron>();
+                        Tetrahedron t4 = tet_builder.GenerateTetrahedron(new GameObject[] { y.gameObject, k_go, a_and_b[0].gameObject, a_and_b[1].gameObject }).GetComponent<Tetrahedron>();
 
                         old_tetrahedra.Add(matching_n.Item1);
                         new_tetrahedra.Add(t3);
@@ -435,7 +432,7 @@ public class Node : MonoBehaviour
         foreach (KeyValuePair<Tetrahedron, List<Tuple<Node, Node, Vector<float>>>> intersected_tet in two_point_intersected_tets)
         {
             // we know for sure that the current tetrahedron will not exist afterwards, so we mark it as "old".
-            if(old_tetrahedra.Contains(intersected_tet.Key))
+            if (old_tetrahedra.Contains(intersected_tet.Key))
             {
                 continue;
             }
@@ -633,7 +630,7 @@ public class Node : MonoBehaviour
                     {
                         if (!n.Equals(x) && !n.Equals(y))
                         {
-                            if(!first_found)
+                            if (!first_found)
                             {
                                 w = n;
                             }
@@ -739,7 +736,7 @@ public class Node : MonoBehaviour
                     new_tetrahedra.Add(n_t2);
                     new_tetrahedra.Add(n_t3);
                 }
-            }
+            }        
         }
         return new Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>>(old_tetrahedra, new_tetrahedra, new_nodes);
     }
@@ -760,7 +757,7 @@ public class Node : MonoBehaviour
         compressive_forces.Clear();
     }
 
-    public bool DoesCrackOccur(float toughness)
+    public bool IsExceedingDeformationLimit(float toughness)
     {
         Debug.Assert(tensile_forces.Count == compressive_forces.Count);
 
