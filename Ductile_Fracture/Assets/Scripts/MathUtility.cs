@@ -10,6 +10,7 @@ public class MathUtility
         else return 0;
     }
 
+    // Vector conversion from one library format into another
     public static Vector<float> ToVector(Vector3 x)
     {
         Debug.Assert(x != null);
@@ -17,6 +18,7 @@ public class MathUtility
         return Vector<float>.Build.DenseOfArray(new float[] { x.x, x.y, x.z });
     }
 
+    // Projects vector a onto vector b
     public static Vector<float> ProjectOnto(Vector<float> a, Vector<float> b)
     {
         Vector<float> projection = Vector<float>.Build.DenseOfArray(new float[] { 0.0f, 0.0f, 0.0f });
@@ -26,6 +28,7 @@ public class MathUtility
         return projection;
     }
 
+    // an element-wise comparison with a certain tolerance
     public static bool EqualsRoughly(Vector<float> x, Vector<float> y, float maximum_difference)
     {
         Debug.Assert(x != null);
@@ -75,6 +78,7 @@ public class MathUtility
         return new Tuple<bool, bool, Vector<float>>(false, false, null);
     }
 
+    // this function checks whether a node n is in the positive halfspace of a given plane or not
     public static bool IsOnPositiveSide(Node n, Vector<float> point_on_plane, Vector<float> plane_normal)
     {
         Debug.Assert(n != null);
@@ -93,6 +97,8 @@ public class MathUtility
         }
     }
 
+    // this function is given 2 nodes which define a line and two other nodes x and y. This
+    // function then proceeds to find out which of x and y lies on the line spun between the first 2 nodes and returns it.
     public static Node WhichNodeIsOnLine(Node line_n1, Node line_n2, Node intersection_x, Node intersection_y)
     {
         Debug.Assert(line_n1 != null);
@@ -111,6 +117,7 @@ public class MathUtility
         return (projection_of_x.L2Norm() < projection_of_y.L2Norm()) ? intersection_x : intersection_y;
     }
 
+    // returns the index of a node n of a tetrahedron t
     public static int GetIndexOf(Tetrahedron x, Node n)
     {
         Debug.Assert(x != null);
@@ -130,6 +137,7 @@ public class MathUtility
         return index;
     }
 
+    // produces a threedimensional representation of the kronecker delta
     public static Vector<float> KroneckerDeltaVector(int i)
     {
         Debug.Assert((i > 0) && (i < 4), "indexing error, easy to fix.");
@@ -139,6 +147,7 @@ public class MathUtility
         return kdv;
     }
 
+    // this function produces a matrix, which has the length of a given vector a as its only eigenvalue.
     public static Matrix<float> M(Vector<float> a)
     {
         if (!(a.At(0) == 0.0 && a.At(1) == 0.0 && a.At(2) == 0.0))

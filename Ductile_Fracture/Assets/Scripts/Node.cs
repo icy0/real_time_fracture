@@ -24,6 +24,10 @@ public class Node : MonoBehaviour
         old_world_position = transform.position;
     }
 
+    /* This function remeshes all tetrahedra attached to *this Node.
+     * returns a List of all old tetrahedra, which are to be removed, a List of all new tetrahedra which
+    are to be added to the list of all tetrahedra and a List of new Nodes which are to be added
+    to the list of all nodes. */
     public Tuple<List<Tetrahedron>, List<Tetrahedron>, List<Node>> Remesh(Vector3 world_position_of_simulated_object)
     {
         Vector<float> world_pos_of_node = Vector<float>.Build.DenseOfArray(new float[] 
@@ -41,12 +45,15 @@ public class Node : MonoBehaviour
         });
 
         TetrahedronBuilder tet_builder = GameObject.Find("FEM_Mesh").GetComponent<TetrahedronBuilder>();
-        RelationManager relation_manager = GameObject.Find("FEM_Mesh").GetComponent<RelationManager>();
 
-        // for each intersected tetrahedron, this dictionary holds a list of Tuples, where one Tuple describes the edge (item1 - item2) and the world_pos (item3) of the intersection
+        // for each two-point-intersected tetrahedron, this dictionary holds a list of Tuples, where one Tuple describes the edge (item1 - item2) and the world_pos (item3) of the intersection
         Dictionary<Tetrahedron, List<Tuple<Node, Node, Vector<float>>>> two_point_intersected_tets = new Dictionary<Tetrahedron, List<Tuple<Node, Node, Vector<float>>>>();
 
+        // for each coplanar-intersected tetrahedron, this dictionary holds a List of Nodes which define the face of the tetrahedron the fracture plane is coplanar to.
         Dictionary<Tetrahedron, List<Node>> coplanar_intersected_tets = new Dictionary<Tetrahedron, List<Node>>();
+
+        // for each parallel-intersected tetrahedron, this dictionary holds a List of Tuples where one Tuple describes an intersection by 
+        // the edge (item1 - item2) and the world_pos (item3) of the intersection
         Dictionary<Tetrahedron, List<Tuple<Node, Node, Vector<float>>>> parallel_edge_but_not_coplanar_intersected_tets = new Dictionary<Tetrahedron, List<Tuple<Node, Node, Vector<float>>>>();
 
         // and there is a list for each non-intersected tetrahedron.
@@ -55,10 +62,10 @@ public class Node : MonoBehaviour
         // we also collect old tetrahedra, which are going to be removed
         List<Tetrahedron> old_tetrahedra = new List<Tetrahedron>();
 
-        // we collect new tetrahedra, which require a relations update
+        // we collect new tetrahedra, which are going to be added to the list of all tetrahedra
         List<Tetrahedron> new_tetrahedra = new List<Tetrahedron>();
 
-        // and we collect newly created nodes, which also require a relations update
+        // and we collect newly created nodes, which are going to be added to the list of all nodes
         List<Node> new_nodes = new List<Node>();
 
         foreach (Tetrahedron t in attached_elements)
@@ -66,10 +73,10 @@ public class Node : MonoBehaviour
             // in here, we want to test each tetrahedron attached to this node for intersection with the
             // fracture plane. This can result in different cases, which we all need to treat differently.
 
-            //      - no intersection (trivial)
-            //      - fracture plane is coplanar to a face of the tetrahedron (trivial)
-            //      - one edge of the tetrahedron lies inside the fracture plane (complex)
-            //      - the fracture plane none of the above and cuts right through the tetrahedron (complex)
+            //      - no intersection
+            //      - fracture plane is coplanar to a face of the tetrahedron
+            //      - one edge of the tetrahedron lies inside the fracture plane
+            //      - the fracture plane cuts right through the tetrahedron
 
             // we can distinguish these cases by testing which edge of the tetrahedron intersects with the fracture plane.
 
@@ -108,6 +115,10 @@ public class Node : MonoBehaviour
                 not_intersected_tets.Add(t);
             }
         }
+
+        // *This Node is exceeding its deformation limit. This means that it will be destroyed and
+        // replaced with two new nodes at the same position. one of these nodes is in the positive halfspace of the 
+        // fracture plane, one is in the negative halfspace.
 
         GameObject kZeroPlus_go = Instantiate(node_prefab.gameObject, transform.parent);
         kZeroPlus_go.transform.position = transform.position;
@@ -431,17 +442,20 @@ public class Node : MonoBehaviour
         // for each two point intersected tetrahedron:
         foreach (KeyValuePair<Tetrahedron, List<Tuple<Node, Node, Vector<float>>>> intersected_tet in two_point_intersected_tets)
         {
-            // we know for sure that the current tetrahedron will not exist afterwards, so we mark it as "old".
+            // if this tetrahedron has been marked as old by being remeshed as a neighbor of a previous tetrahedron,
+            // we don't need to remesh it again here.
             if (old_tetrahedra.Contains(intersected_tet.Key))
             {
                 continue;
             }
             else
             {
+                // we know for sure that the current tetrahedron will not exist afterwards, so we mark it as "old".
                 old_tetrahedra.Add(intersected_tet.Key);
             }
 
-            // find out which node is on which side of the fracture plane
+            // there is exactly one node of the tetrahedron, which is on one side of the fracture plane, and
+            // two nodes which are on the other side of it. we have to find out which is where to remesh accordingly.
             List<Tuple<Node, bool>> nodes_with_halfspace_flag = new List<Tuple<Node, bool>>(); // true == positive halfspace
             Node[] nodes_of_t = intersected_tet.Key.nodes;
             int count_of_negative_nodes = 0;
@@ -463,7 +477,8 @@ public class Node : MonoBehaviour
                 }
             }
 
-            // identify k1, k2, k3
+            // identify k1 which is the lonely node in one halfspace of the tetrahedron, 
+            // identify k2 and k3 which are both in the other halfspace.
             Node kOne = null;
             Node kTwo;
             Node kThree;
@@ -787,6 +802,7 @@ public class Node : MonoBehaviour
             sumOfMOfCompressiveForces += MathUtility.M(cf);
         }
 
+        // this is the separation tensor sigma
         Matrix<float> st = -MathUtility.M(sumOverTensileForces) + sumOfMOfTensileForces + MathUtility.M(sumOverCompressiveForces) - sumOfMOfCompressiveForces;
         st /= 1 / 2.0f;
 
@@ -796,7 +812,7 @@ public class Node : MonoBehaviour
 
         if (toughness < max)
         {
-            bool debug_worked = false;
+            bool found_corresponding_eigenvector = false;
             Vector<float> lhs_transformed_eigenvec_1 = st * evd.EigenVectors.Column(0);
             Vector<float> lhs_transformed_eigenvec_2 = st * evd.EigenVectors.Column(1);
             Vector<float> lhs_transformed_eigenvec_3 = st * evd.EigenVectors.Column(2);
@@ -808,22 +824,23 @@ public class Node : MonoBehaviour
             if (MathUtility.EqualsRoughly(lhs_transformed_eigenvec_1, rhs_transformed_eigenvec_1, maximum_difference: 0.5f))
             {
                 fracture_plane_normal = evd.EigenVectors.Column(0) / (float)evd.EigenVectors.Column(0).L2Norm();
-                debug_worked = true;
+                found_corresponding_eigenvector = true;
             }
 
             else if (MathUtility.EqualsRoughly(lhs_transformed_eigenvec_2, rhs_transformed_eigenvec_2, maximum_difference: 0.5f))
             {
                 fracture_plane_normal = evd.EigenVectors.Column(1) / (float)evd.EigenVectors.Column(1).L2Norm();
-                debug_worked = true;
+                found_corresponding_eigenvector = true;
             }
 
             else if (MathUtility.EqualsRoughly(lhs_transformed_eigenvec_3, rhs_transformed_eigenvec_3, maximum_difference: 0.5f))
             {
                 fracture_plane_normal = evd.EigenVectors.Column(2) / (float)evd.EigenVectors.Column(2).L2Norm();
-                debug_worked = true;
+                found_corresponding_eigenvector = true;
             }
 
-            Debug.Assert(debug_worked);
+            Debug.Assert(found_corresponding_eigenvector, "This Error is most likely here, because one Tetrahedron attached to a Node is so small," +
+                "that it is impossible to correctly calculate the eigenvalues and eigenvectors.");
 
             return true;
         }

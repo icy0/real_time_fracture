@@ -34,7 +34,9 @@ public class FractureSimulator : MonoBehaviour
     List<Tetrahedron> alltetrahedra = new List<Tetrahedron>();
     List<Node> allnodes = new List<Node>();
 
-    static Material glass = new Material(1.04e8f, 1.04e8f, 0.0f, 6760.0f, 2588.0f, 10140.0f, 0.022f, 0.4f);
+    static Material glass = new Material(1.04e8f, 1.04e8f, 0.0f, 6760.0f, 2588.0f, 10140.0f, 0.0f, 0.0f);
+    static Material adobe_wall = new Material(6.03e8f, 1.21e8f, 3015.0f, 6030.0f, 2309, 6030.0f, 0.0f, 0.0f);
+    static Material ceramic = new Material(2.65e6f, 3.97e6f, 264.0f, 397.0f, 1013.0f, 52.9f, 0.0f, 0.0f);
     static Material current = glass;
 
     void Start()
@@ -43,6 +45,7 @@ public class FractureSimulator : MonoBehaviour
         relation_manager.UpdateRelations();
 
         Time.fixedDeltaTime = 0.1f;
+
         GameObject[] nodes = GameObject.FindGameObjectsWithTag("FEM_Node");
         GameObject[] tetrahedra = GameObject.FindGameObjectsWithTag("FEM_Tetrahedron");
 

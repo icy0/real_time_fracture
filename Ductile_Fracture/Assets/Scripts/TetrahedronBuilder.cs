@@ -99,7 +99,6 @@ public class TetrahedronBuilder : MonoBehaviour
         tetrahedron_mesh.normals = normals;
         tetrahedron_go.AddComponent<MeshFilter>().mesh = tetrahedron_mesh;
         MeshRenderer mesh_renderer = tetrahedron_go.AddComponent<MeshRenderer>();
-        //mesh_renderer.sharedMaterial = tet_material; 
         mesh_renderer.sharedMaterial = Resources.Load("Materials/Tetrahedron", typeof(Material)) as Material;
         tetrahedron_go.tag = "FEM_Tetrahedron";
 

@@ -1,0 +1,10 @@
+Sehr geehrter Herr Zinnen,
+
+erst einmal möchte ich die Gelegenheit nutzen, mich bei Ihnen zu bedanken, dass Sie so kurzfristig der Zweitprüfer meiner Bachelorarbeit sein können. :)
+
+Die Ausarbeitung findet sich im Anhang dieser Mail, das zugehörige Softwareprojekt habe ich als Google Drive Download unter diesem Link bereitgestellt: <Link>
+
+Das Unityprojekt wurde unter der Unity-Version 2019.3.15f1 entwickelt. Um die Software zu verwenden, ist keine Game-Ansicht notwendig, alles geschieht in der Scene-Ansicht. Um Deformierungen von Tetraedern durchzuführen, müssen Sie den Play-Modus aktivieren, in die Scene-Ansicht wechseln und die Knotenpunkte der Tetraeder verschieben. Um eigene Tetraedernetze bauen zu können, müssen Sie unter dem Menü "Window" das "Fracture Tool" öffnen. Wenn Sie nun 4 NodePrefabs in einer Scene instanziieren, sie auswählen und dann den Button "Generate Tetrahedron" klicken, wird ein Tetraeder erstellt. Sie können beliebig viele Knotenpunkte und Tetraeder aneinanderhängen.
+
+Mit freundlichen Grüßen,
+Paul Froelich

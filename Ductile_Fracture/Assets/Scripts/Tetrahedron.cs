@@ -9,7 +9,6 @@ public class Tetrahedron : MonoBehaviour
     public Node[] nodes = new Node[4];
     public List<Transform> node_transforms = new List<Transform>();
     public Dictionary<Tetrahedron, List<Node>> neighbors = new Dictionary<Tetrahedron, List<Node>>();
-    public int neighbors_count; // DEBUG
 
     public float volume;
     private Matrix<float> beta;
@@ -28,6 +27,8 @@ public class Tetrahedron : MonoBehaviour
         ResetPlasticStrain();
     }
 
+
+    // this function does the intersection calculation of the fracture plane and the tetrahedron and returns the retrieved information.
     public Tuple<bool /*is there an edge of the tet that is parallel to the fracture plane and is the fp NOT parallel to a face*/, 
         bool /*is the fracture plane coplanar with a face?*/, 
         List<Tuple<Node, Node, Vector<float>>>> 
@@ -39,6 +40,7 @@ public class Tetrahedron : MonoBehaviour
         bool parallel_to_edge_but_not_coplanar = false;
 
         // only do intersection for edges between nodes that are not n
+        // because intersection with the edges with n on it do not contribute any relevant information
         Node x, y, z;
         int i = MathUtility.GetIndexOf(this, n);
 
@@ -53,8 +55,6 @@ public class Tetrahedron : MonoBehaviour
         Tuple<bool, bool, Vector<float>> intersection_xy = MathUtility.LinePlaneIntersection(world_pos_of_n, normal_of_plane, world_pos_of_x, world_pos_of_y);
         Tuple<bool, bool, Vector<float>> intersection_xz = MathUtility.LinePlaneIntersection(world_pos_of_n, normal_of_plane, world_pos_of_x, world_pos_of_z);
         Tuple<bool, bool, Vector<float>> intersection_yz = MathUtility.LinePlaneIntersection(world_pos_of_n, normal_of_plane, world_pos_of_y, world_pos_of_z);
-
-        // TODO if the intersection point is too close to a node, just set it to be on the node and update the booleans. this way we avoid marginally small tetrahedra.
 
         if (intersection_xy.Item1) intersection_points.Add(new Tuple<Node, Node, Vector<float>>(x, y, intersection_xy.Item3));
         if (intersection_xz.Item1) intersection_points.Add(new Tuple<Node, Node, Vector<float>>(x, z, intersection_xz.Item3));
@@ -399,7 +399,9 @@ public class Tetrahedron : MonoBehaviour
     public void UpdateInternalForcesOfNodes(float dilation, float rigidity, float phi, float psi, float elastic_limit, float plastic_limit)
     {
         Matrix<float> total_internal_stress = TotalInternalStress(dilation, rigidity, phi, psi, elastic_limit, plastic_limit);
-        Debug.Assert(total_internal_stress.IsSymmetric(), "The total internal stress tensor is not symmetric.");
+        Debug.Assert(total_internal_stress.IsSymmetric(), "The total internal stress tensor is not symmetric. " +
+            "This Error is most likely here, because one Tetrahedron attached to a Node is so small," +
+                "that it is impossible to correctly calculate the eigenvalues and eigenvectors.");
 
         Evd<float> evd_of_total_internal_stress = total_internal_stress.Evd(Symmetricity.Symmetric);
         volume = Volume();
